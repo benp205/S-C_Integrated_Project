@@ -7,6 +7,9 @@ Person 2:
 Add coloured cube, table, drop off point
 
 Person 3: 
-Visual Servoing?
+Visual Servoing
 
 Person 4:
+Joint-Space State Controller
+
+(Person 3-4 may not be complete but should be worked upon by 13/10)
