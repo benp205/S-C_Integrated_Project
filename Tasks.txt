@@ -1,0 +1,12 @@
+# Tasks for Week 10 going into Week 11
+
+Person 1:
+Add to simulation: UR5 Arm, Realsense d435, Robotiq 2F-85 gripper 
+
+Person 2: 
+Add coloured cube, table, drop off point
+
+Person 3: 
+Visual Servoing?
+
+Person 4:
