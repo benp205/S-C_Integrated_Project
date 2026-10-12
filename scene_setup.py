@@ -3,6 +3,9 @@ import mujoco.viewer
 import mujoco_menagerie as mm #for robot and gripper models
 import numpy as np
 import cv2
+from pathlib import Path
+
+TAG_PNG = Path(__file__).with_name("aruco_4x4_1000_7.png") #raster of 4x4_1000-7.svg with 1 cell white margin (MuJoCo can't load svg)
 
 #mujoco docs say implicitfast is recommended, elliptic cones are a better model of physical reality, impratio makes friction stick better
 #brown table/base
@@ -13,6 +16,10 @@ scene_xml = """
   <visual>
     <map znear="0.01"/>
   </visual>
+  <asset>
+    <texture name="aruco_tex" type="2d" file="TAG_PNG_PATH"/>
+    <material name="aruco_mat" texture="aruco_tex" specular="0" shininess="0"/>
+  </asset>
   <worldbody>
     <light name="top" pos="0 0 4" dir="0 0 -1" castshadow="false"/>
         <geom name="floor" type="plane" pos="0 0.3 -0.5" size="3 3 0.1" rgba="1 1 1 1"/>
@@ -21,6 +28,8 @@ scene_xml = """
       <freejoint name="target_cube_joint"/>
       <geom name="cube_geom" type="box" size="0.025 0.025 0.025" rgba="1 0 0 1"
             mass="0.1" friction="1"/>
+      <geom name="aruco_tag" type="box" size="0.025 0.025 0.0002" pos="0 0 0.0252" material="aruco_mat"
+            contype="0" conaffinity="0" mass="0"/>
     </body>
   </worldbody>
 </mujoco>
@@ -41,7 +50,7 @@ def random_cube():
     
     mujoco.mj_forward(model, data) #make mujoco update scene
 
-scene_spec = mujoco.MjSpec.from_string(scene_xml)
+scene_spec = mujoco.MjSpec.from_string(scene_xml.replace("TAG_PNG_PATH", TAG_PNG.as_posix()))
 robot_spec = mm.get("universal_robots_ur5e").spec()
 gripper_spec = mm.get("robotiq_2f85").spec()
 
@@ -71,7 +80,8 @@ renderer = mujoco.Renderer(model, 480, 640)
 
 camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "robot_realsense_d435") #find id of camera
 
-try:
+if __name__ == "__main__": #lets visual_servo import the scene without opening this viewer
+  try:
     with mujoco.viewer.launch_passive(model, data) as viewer:
         while viewer.is_running():
             mujoco.mj_step(model, data)
@@ -100,7 +110,7 @@ try:
             cv2.waitKey(1)
             viewer.sync()
 
-finally:
+  finally:
     cv2.destroyAllWindows()
     cv2.waitKey(1) 
     
