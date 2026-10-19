@@ -238,12 +238,14 @@ def detect_tag_pose(rgb, K_matrix=None, dist_coeffs=None):
     corners, ids, _ = detector.detectMarkers(cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY))
     if ids is None or TAG_ID not in ids.ravel():
         return None
-    
+    sigma_px = 1.0 # Standard deviation of pixel measurement noise
     uv = corners[list(ids.ravel()).index(TAG_ID)].reshape(4, 2).T
+    uv_noisy = uv + np.random.normal(scale=sigma_px, size=uv.shape)
+
     K_use = cam.K if K_matrix is None else K_matrix
 
     success, rvec, tvec = cv2.solvePnP(
-        tag_corners(SIDE).T, uv.T, K_use, dist_coeffs,
+        tag_corners(SIDE).T, uv_noisy.T, K_use, dist_coeffs,
         flags=cv2.SOLVEPNP_IPPE_SQUARE,
     )
     
@@ -254,7 +256,7 @@ def detect_tag_pose(rgb, K_matrix=None, dist_coeffs=None):
     if not np.isfinite(R).all():
         return None
         
-    return R, tvec.reshape(3), uv
+    return R, tvec.reshape(3), uv_noisy
 
 
 # --- 3. KINEMATICS & CONTROL MAPPING ---
@@ -339,7 +341,7 @@ def run_pbvs(
                         print("Tag lost too far from target; aborting.")
                         break
 
-                rotation, t, uv = seen  # Unpack current tag rotation matrix, translation vector (3D position), and 2D pixel corners
+                rotation, t, uv_noisy = seen  # Unpack current tag rotation matrix, translation vector (3D position), and 2D pixel corners
                 last_valid_z = t[2]  # Save current camera-frame depth (Z coordinate) to detect when the tag is close to the table
 
                 t_star, r_star = T_star.t, T_star.R  # Extract target position and rotation from the desired pose T_star
@@ -355,7 +357,7 @@ def run_pbvs(
                 data.ctrl[:6] = q_target  # Send the updated target joint angles to the UR3 arm's position controllers
 
                 error_norm = np.linalg.norm(e_t)  # Compute the Euclidean magnitude (distance) of the 3D position error
-                history.append((uv, error_norm))  # Store current 2D pixel corners and error norm for debugging/plotting later
+                history.append((uv_noisy, error_norm))  # Store current 2D pixel corners and error norm for debugging/plotting later
 
                 if error_norm < tol:
                     steps_remaining = max(1, int(np.ceil(blind_descent / (blind_speed * dt))))
