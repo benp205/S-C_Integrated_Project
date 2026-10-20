@@ -77,8 +77,10 @@ def move_camera_to_look_at(target_cam_pos, board_center, viewer=None, max_steps=
         # Orthonormal X and Y camera axes
         x_des = np.cross(np.array([0.0, 1.0, 0.0]), z_des)
         x_des = x_des / np.linalg.norm(x_des)
+
         y_des = np.cross(z_des, x_des)
         y_des = y_des / np.linalg.norm(y_des)
+        
         R_des = np.column_stack([x_des, y_des, z_des])
         
         # Pose error in camera frame

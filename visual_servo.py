@@ -22,9 +22,10 @@ def tag_corners(s):
 
 #fovy gives the focal length in pixels; rho=1 so f is in pixels like the lab
 f_px = (480 / 2) / np.tan(np.deg2rad(model.cam_fovy[camera_id]) / 2)
+
 cam = CentralCamera(f=f_px, imagesize=(640, 480), rho=1)
 
-T_star = SE3.Trans(0, 0.075, 0.25) * SE3.Rx(np.pi) #desired tag pose in the camera frame: 50 cm in front, facing the camera
+T_star = SE3.Trans(0, 0.075, 0.25) * SE3.Rx(np.pi) #desired tag pose in the camera frame: 25 cm in front, facing the camera
 p_star = cam.project_point(tag_corners(SIDE), objpose=T_star)
 
 detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_1000))
