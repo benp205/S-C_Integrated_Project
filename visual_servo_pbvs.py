@@ -285,6 +285,7 @@ def run_pbvs(
     lam=0.5, niter=1200, vmax=0.025, nsub=10, tol=0.005,
     blind_descent=0.05, blind_ascent=0.15, blind_speed=0.02, close_steps=30,
     return_steps=150,  # Number of steps to glide back home
+    controller=None,  # JointStateController; if None, q_target is sent straight to the actuators
 ):
     dt = nsub * model.opt.timestep
     history, first_rgb = [], None
@@ -296,6 +297,13 @@ def run_pbvs(
     q_lift_end = None
     
     data.ctrl[gripper_actuator] = 0  # Open gripper initially
+
+    def command_arm(q_des):
+        '''Send the desired joint pose to the arm, through the state controller when one is supplied.'''
+        if controller is None:
+            data.ctrl[:6] = q_des
+        else:
+            data.ctrl[:6] = controller.step(data.qpos[qadr], q_des)
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         # 1. Run camera calibration routine inside the active viewer
@@ -316,6 +324,8 @@ def run_pbvs(
 
         q_target = data.qpos[qadr].copy()
         q_init = q_target.copy()  # Save original starting joint configuration
+        if controller is not None:
+            controller.reset(q_target)  # Observer/command start at the real home pose
 
         k = 0
         while viewer.is_running():
@@ -355,8 +365,9 @@ def run_pbvs(
                 nu = np.r_[v, omega]  # Concatenate linear (v) and angular (omega) components into a full 6D camera twist vector
                 nu[:3] *= min(1, vmax / (np.linalg.norm(nu[:3]) + 1e-9))  # Clamp linear velocity magnitude to max speed limit (vmax) for safety
 
+
                 q_target += camera_twist_to_dq(nu) * dt  # Map camera twist to joint velocities, integrate over dt, and update joint targets
-                data.ctrl[:6] = q_target  # Send the updated target joint angles to the UR3 arm's position controllers
+                command_arm(q_target)  # Was: data.ctrl[:6] = q_target (now routed through the joint-space state controller)
 
                 error_norm = np.linalg.norm(e_t)  # Compute the Euclidean magnitude (distance) of the 3D position error
                 history.append((uv_noisy, error_norm))  # Store current 2D pixel corners and error norm for debugging/plotting later
@@ -371,9 +382,9 @@ def run_pbvs(
                 cv_to_world = data.cam_xmat[camera_id].reshape(3, 3) @ np.diag([1, -1, -1])
                 nu = np.zeros(6)
                 nu[:3] = cv_to_world.T @ np.array([0, 0, -blind_speed])
-                
+
                 q_target += camera_twist_to_dq(nu) * dt
-                data.ctrl[:6] = q_target
+                command_arm(q_target)  # Was: data.ctrl[:6] = q_target
                 steps_remaining -= 1
 
                 if steps_remaining == 0:
@@ -383,6 +394,7 @@ def run_pbvs(
 
             # --- STATE 3: ACTIVATE GRIPPER ---
             elif state == "GRASPING":
+                command_arm(q_target)  # Keep holding the pose through the controller (was: nothing)
                 data.ctrl[gripper_actuator] = 255
                 steps_remaining -= 1
 
@@ -396,9 +408,9 @@ def run_pbvs(
                 cv_to_world = data.cam_xmat[camera_id].reshape(3, 3) @ np.diag([1, -1, -1])
                 nu = np.zeros(6)
                 nu[:3] = cv_to_world.T @ np.array([0, 0, blind_speed])
-                
+
                 q_target += camera_twist_to_dq(nu) * dt
-                data.ctrl[:6] = q_target
+                command_arm(q_target)  # Was: data.ctrl[:6] = q_target
                 data.ctrl[gripper_actuator] = 255
                 steps_remaining -= 1
 
@@ -411,18 +423,19 @@ def run_pbvs(
             elif state == "RETURNING":
                 return_step_count += 1
                 alpha = min(1.0, return_step_count / return_steps)
-                
+
                 # Smooth interpolation (LERP) from lift-end pose back to starting pose
                 q_target = (1 - alpha) * q_lift_end + alpha * q_init
-                data.ctrl[:6] = q_target
+                command_arm(q_target)  # Was: data.ctrl[:6] = q_target
                 data.ctrl[gripper_actuator] = 255  # Maintain object grasp
-                
+
                 if alpha >= 1.0:
                     print("Returned to home position. Holding.")
                     state = "HOLDING"
 
             # --- STATE 6: HOLD POSITION ---
             elif state == "HOLDING":
+                command_arm(q_target)  # Keep holding the pose through the controller (was: nothing)
                 data.ctrl[gripper_actuator] = 255
 
             k += 1
