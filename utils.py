@@ -45,3 +45,30 @@ def generate_random_spline_path(start_pos=(-0.22, 0.42), x_bounds=(-0.22, 0.02),
     mocap_yaw = [np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)] #rotate about z axis
 
     return spline_x, spline_y, total_duration, mocap_yaw
+
+def CameraJacobian(enc_pos):
+    '''
+    Computes the 6x6 geometric Jacobian in the world frame evaluated at the 
+    camera position, using only the UR5e analytical forward kinematics (SE3)
+    and estimated/measured joint angles. No MuJoCo model/data references used.
+    '''
+    T0 = SE3.Rz(enc_pos[0]) * SE3.Tz(0.1625) * SE3.Rx(np.pi / 2)
+    T1 = T0 * SE3.Rz(enc_pos[1]) * SE3.Tx(-0.425)
+    T2 = T1 * SE3.Rz(enc_pos[2]) * SE3.Tx(-0.3922)
+    T3 = T2 * SE3.Rz(enc_pos[3]) * SE3.Tz(0.1333) * SE3.Rx(np.pi / 2)
+    T4 = T3 * SE3.Rz(enc_pos[4]) * SE3.Tz(0.0997) * SE3.Rx(-np.pi / 2)
+    T5 = T4 * SE3.Rz(enc_pos[5]) * SE3.Tz(0.0996)
+    T_cam = T5 * SE3(0, -0.06, 0.0204) # Camera frame relative to the last link frame
+
+    p_cam = T_cam.t
+    # Frames right before each joint's Rz(q_i) rotation
+    joint_frames = [SE3(), T0, T1, T2, T3, T4]
+
+    J = np.zeros((6, 6))
+    for i, Tf in enumerate(joint_frames): # Compute each column of the Jacobian corresponding to joint i
+        z_i = Tf.R[:, 2]  # Axis of rotation for joint i in world frame
+        p_i = Tf.t        # Origin of joint i in world frame
+        J[:3, i] = np.cross(z_i, p_cam - p_i) # Linear velocity contribution of joint i to the camera frame
+        J[3:, i] = z_i # Angular velocity contribution of joint i to the camera frame
+
+    return J
