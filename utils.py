@@ -19,7 +19,7 @@ def CameratoWorld(enc_pos): #replacement for cam_xpos
 
     return T.t, T.R #return translation and rotation
 
-def generate_random_spline_path(start_pos=(-0.22, 0.42), x_bounds=(-0.22, 0.02), y_bounds=(0.42, 0.58), num_waypoints=4, speed=0.01):
+def generate_random_spline_path(start_pos=(-0.22, 0.42), x_bounds=(-0.22, 0.02), y_bounds=(0.42, 0.58), num_waypoints=5, speed=0.02):
     #generates random path to follow at a rough speed
     #make the start of the path the same as the cube placement in the sim
     x_waypoints = np.zeros(num_waypoints)

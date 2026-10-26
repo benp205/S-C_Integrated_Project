@@ -290,7 +290,7 @@ def camera_twist_to_dq(nu, damping=1e-3):
 
 # --- 4. MAIN PBVS & PICK-AND-PLACE STATE MACHINE ---
 def run_pbvs(
-    lam=0.5, niter=4000, vmax=0.025, nsub=10, tol=0.010,
+    lam=0.5, niter=4000, vmax=0.05, nsub=10, tol=0.010,
     blind_descent=0.15, blind_ascent=0.15, blind_speed=0.05, close_steps=30,
     return_steps=150,  # Number of steps to glide back home
     controller=None,  # JointStateController; if None, q_target is sent straight to the actuators
@@ -414,6 +414,9 @@ def run_pbvs(
 
                 est_cube_pos = cv_to_world.T @ (xc[:3] - cam_pos) #reexpress cube world coordinates in camera frame
 
+                est_vel_cube = xc[3:6] #get estimated cube velocity from KF
+                est_vel_cam = cv_to_world.T @ est_vel_cube #cube velocity in camera frame
+
                 last_valid_z = est_cube_pos[2]  # Save current camera-frame depth (Z coordinate) to detect when the tag is close to the table
 
                 t_star, r_star = T_star.t, T_star.R  # Extract target position and rotation from the desired pose T_star
@@ -421,7 +424,7 @@ def run_pbvs(
                 e_theta = SO3(rotation @ r_star.T, check=False).log(twist=True)  # Compute 3D rotational error vector (axis-angle representation)
 
                 omega = lam * e_theta  # Compute proportional angular velocity command scaled by visual gain (lam)
-                v = lam * e_t + np.cross(est_cube_pos, omega)  # Compute linear velocity command, incorporating rotational coupling via cross product
+                v = est_vel_cam + (lam * e_t) + np.cross(est_cube_pos, omega)  # Compute linear velocity command, incorporating rotational coupling via cross product, added velocity feed forward est_vel_cam from KF
                 nu = np.r_[v, omega]  # Concatenate linear (v) and angular (omega) components into a full 6D camera twist vector
                 nu[:3] *= min(1, vmax / (np.linalg.norm(nu[:3]) + 1e-9))  # Clamp linear velocity magnitude to max speed limit (vmax) for safety
 
