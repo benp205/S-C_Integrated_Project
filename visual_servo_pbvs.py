@@ -8,7 +8,7 @@ from machinevisiontoolbox import CentralCamera, Image
 from spatialmath import SE3, SO3
 import scene_setup as sc
 from cube_estimator import CubePositionEstimator
-from utils import getEncPosition, CameratoWorld, generate_random_spline_path
+from utils import getEncPosition, CameratoWorld, generate_random_spline_path, CameraJacobian
 
 # --- 1. INITIALIZATION & SCENE SETUP ---
 model, data, renderer, camera_id, enc_adr = sc.model, sc.data, sc.renderer, sc.camera_id, sc.enc_adr
@@ -38,9 +38,7 @@ detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.D
 
 # Robot joint and actuator mappings
 arm_joints = [f"robot_{n}_joint" for n in ["shoulder_pan", "shoulder_lift", "elbow", "wrist_1", "wrist_2", "wrist_3"]]
-qadr = [model.joint(j).qposadr[0] for j in arm_joints]  # Indices of the arm joint positions in MuJoCo's global qpos vector
-dadr = [model.joint(j).dofadr[0] for j in arm_joints]  # Indices of the arm joint degrees-of-freedom/velocities in MuJoCo's global dof vector
-wrist_id = model.body("robot_wrist_3_link").id
+qadr = [model.joint(j).qposadr[0] for j in arm_joints]
 gripper_actuator = mj.mj_name2id(model, mj.mjtObj.mjOBJ_ACTUATOR, "robot_gripper_fingers_actuator")
 
 
@@ -71,8 +69,6 @@ def move_camera_to_look_at(target_cam_pos, board_center, viewer=None, max_steps=
             break
 
         mj.mj_forward(model, data)
-        #cam_pos = data.cam_xpos[camera_id]
-        #R_cv = data.cam_xmat[camera_id].reshape(3, 3) @ np.diag([1, -1, -1])
         enc_pos = getEncPosition(data, enc_adr)
         cam_pos, R_cv = CameratoWorld(enc_pos)
         
@@ -98,7 +94,7 @@ def move_camera_to_look_at(target_cam_pos, board_center, viewer=None, max_steps=
             break
             
         nu = np.r_[2.0 * e_pos, 2.0 * e_rot]
-        dq = camera_twist_to_dq(nu, damping=1e-2)
+        dq = camera_twist_to_dq(nu, enc_pos, damping=1e-2)
         data.qpos[qadr] += dq * 0.03
         data.ctrl[:6] = data.qpos[qadr]
 
@@ -267,22 +263,18 @@ def detect_tag_pose(rgb, K_matrix=None, dist_coeffs=None):
     return R, tvec.reshape(3), uv_noisy
 
 
-# --- 3. KINEMATICS & CONTROL MAPPING ---
-def camera_twist_to_dq(nu, damping=1e-3):
+# --- 3. KINEMATICS & CONTROL MAPPING (DECOUPLED FROM MUJOCO MODEL) ---
+def camera_twist_to_dq(nu, q_est, damping=1e-3):
     '''
     Maps a camera-frame velocity twist (OpenCV axes: z-forward, y-down) 
-    to arm joint velocities using the analytical body Jacobian and damped least squares.
+    to arm joint velocities using purely estimated/measured joint angles (q_est),
+    analytical forward kinematics, and damped least squares.
     '''
-    # Transform OpenCV camera frame axes to MuJoCo world/body frame axes
-    #cv_to_world = data.cam_xmat[camera_id].reshape(3, 3) @ np.diag([1, -1, -1])
-    enc_pos = getEncPosition(data, enc_adr)
-    cam_pos, cv_to_world = CameratoWorld(enc_pos)
+    _, cv_to_world = CameratoWorld(q_est)
     twist = np.concatenate([cv_to_world @ nu[:3], cv_to_world @ nu[3:]])
     
-    # Compute robot Jacobian at the wrist camera frame
-    jacp, jacr = np.zeros((3, model.nv)), np.zeros((3, model.nv))
-    mj.mj_jac(model, data, jacp, jacr, cam_pos, wrist_id)
-    J = np.vstack([jacp, jacr])[:, dadr]
+    # Analytical 6x6 Jacobian evaluated at q_est (completely independent of MuJoCo model)
+    J = CameraJacobian(q_est)
     
     # Damped least-squares pseudo-inverse solve: J^T * (J * J^T + damping * I)^-1 * twist
     return J.T @ np.linalg.solve(J @ J.T + damping * np.eye(6), twist)
@@ -292,12 +284,16 @@ def camera_twist_to_dq(nu, damping=1e-3):
 def run_pbvs(
     lam=0.5, niter=4000, vmax=0.05, nsub=10, tol=0.010,
     blind_descent=0.15, blind_ascent=0.15, blind_speed=0.05, close_steps=30,
-    return_steps=150,  # Number of steps to glide back home
-    controller=None,  # JointStateController; if None, q_target is sent straight to the actuators
+    return_steps=150,   # Number of steps to glide back home
+    max_tag_dropout=0.5, # Max time (seconds) to coast on EKF when tag is lost during TRACKING
+    controller=None,    # JointStateController; if None, q_target is sent straight to the actuators
 ):
     dt = nsub * model.opt.timestep
     history, first_rgb = [], None
     last_valid_z = None
+    last_valid_rot = None
+    last_valid_uv = None
+    tag_lost_time = 0.0
     
     state = "TRACKING"
     steps_remaining = 0
@@ -308,12 +304,18 @@ def run_pbvs(
 
     spline_x, spline_y, total_duration, mocap_yaw = generate_random_spline_path()
 
-    def command_arm(q_des):
+    def get_estimated_joints(enc_meas):
+        '''Returns joint angles from the state controller's observer if available, else sensor reading.'''
+        if controller is not None and controller.initialised:
+            return controller.estimated_state()[:6]
+        return enc_meas
+
+    def command_arm(q_des, enc_meas):
         '''Send the desired joint pose to the arm, through the state controller when one is supplied.'''
         if controller is None:
             data.ctrl[:6] = q_des
         else:
-            data.ctrl[:6] = controller.step(data.qpos[qadr], q_des)
+            data.ctrl[:6] = controller.step(enc_meas, q_des)
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         # 1. Run camera calibration routine inside the active viewer
@@ -330,22 +332,23 @@ def run_pbvs(
                 break
         viewer.sync()
 
-        q_target = data.qpos[qadr].copy()
+        enc_pos = getEncPosition(data, enc_adr)
+        q_target = enc_pos.copy()
         q_init = q_target.copy()  # Save original starting joint configuration
         if controller is not None:
-            controller.reset(q_target)  # Observer/command start at the real home pose
+            controller.reset(q_target)  # Observer/command start at the measured home pose
 
         k = 0
 
         xc = np.zeros(6)
-        Pc = np.diag([0.5**2] * 3 + [0.05**2] * 3) #0.5m std dev for position, 0.05m/s std dev for speed, high initial uncertainty
+        Pc = np.diag([0.5**2] * 3 + [0.05**2] * 3) # 0.5m std dev for position, 0.05m/s std dev for speed, high initial uncertainty
         
         cube_log = []
         nis_cube = []
 
         cube_stopped = False
-        cube_vel_stop = 0.002 #cube velocity under 0.002m/s to account for noise, may need tuning
-        still_frames = 100 #cube velocity under 0.002m/s for 100 frames
+        cube_vel_stop = 0.002 # cube velocity under 0.002m/s to account for noise, may need tuning
+        still_frames = 100    # cube velocity under 0.002m/s for 100 frames
         still_count = 0
 
         path_start_time = data.time
@@ -356,20 +359,23 @@ def run_pbvs(
                 break
 
             for _ in range(nsub):
-                time_cube = data.time - path_start_time #data.time starts with the sim and includes the camera calibration, readjust so cube time = 0
+                time_cube = data.time - path_start_time # data.time starts with the sim and includes the camera calibration, readjust so cube time = 0
                 if time_cube >= total_duration:
-                    data.eq_active[0] = 0 #remove cube and mocap weld so cube stops moving and can be picked up
+                    data.eq_active[0] = 0 # remove cube and mocap weld so cube stops moving and can be picked up
 
-                #make the cube move along the random spline
+                # make the cube move along the random spline
                 data.mocap_pos[0, 0] = spline_x(time_cube)
                 data.mocap_pos[0, 1] = spline_y(time_cube)
-                data.mocap_pos[0, 2] = 0.025 #constant for table height
-                data.mocap_quat[0] = mocap_yaw #single random yaw
+                data.mocap_pos[0, 2] = 0.025 # constant for table height
+                data.mocap_quat[0] = mocap_yaw # single random yaw
 
                 mj.mj_step(model, data)
             viewer.sync()
 
+            # Read noisy joint encoders and extract observer's estimated joint positions
             enc_pos = getEncPosition(data, enc_adr)
+            q_est = get_estimated_joints(enc_pos)
+            cam_pos, cv_to_world = CameratoWorld(q_est)
 
             rgb = get_rgb()
             first_rgb = rgb if first_rgb is None else first_rgb
@@ -380,42 +386,50 @@ def run_pbvs(
 
             z_cube = None
 
-            if seen is not None: #only run if tag is visible
-                cam_pos, cv_to_world = CameratoWorld(enc_pos) #get world to camera from the current encoder position
-                z_cube = cam_pos + cv_to_world @ seen[1] #reexpress tag position (cube position) from seen t in world frame
+            if seen is not None: # only run measurement update if tag is visible
+                z_cube = cam_pos + cv_to_world @ seen[1] # reexpress tag position (cube position) from seen t in world frame
 
-            xc, Pc, nis_c = cube_est.step_cube(xc, Pc, z_cube, dt) #estimate
+            xc, Pc, nis_c = cube_est.step_cube(xc, Pc, z_cube, dt) # EKF step (predicts even when z_cube is None)
 
-            est_cube_vel = np.linalg.norm(xc[3:5]) #cubes estimated velocity (not including z)
+            est_cube_vel = np.linalg.norm(xc[3:5]) # cube's estimated velocity (not including z)
 
-            cube_slow = True if est_cube_vel < cube_vel_stop else False #check if velocity is below threshold
+            cube_slow = True if est_cube_vel < cube_vel_stop else False # check if velocity is below threshold
 
-            still_count += 1 if cube_slow == True else 0 #start counting frames if cube is stopped, reset if moves above threshold
+            # Kept original accumulation behavior so single encoder-noise spikes don't prevent descent
+            still_count += 1 if cube_slow == True else 0
 
-            cube_stopped = True if still_count >= still_frames else False #if cube is stopped for a certain frame count
+            cube_stopped = True if still_count >= still_frames else False # if cube is stopped for a certain frame count
 
             if state == "TRACKING":
-                cube_log.append((data.time, xc.copy(), data.body("target_cube").xpos.copy())) #only log in tracking state, freaks out if camera gets too close
+                cube_log.append((data.time, xc.copy(), data.body("target_cube").xpos.copy())) # only log in tracking state
                 nis_cube.append(nis_c)
 
             # --- STATE 1: VISUAL SERVOING TRACKING ---
             if state == "TRACKING":
-                if seen is None:
-                    if last_valid_z is not None and last_valid_z < 0.10:
+                if seen is None: # Tag is not visible in the current frame
+                    tag_lost_time += dt # Increment the time the tag has been lost 
+                    if last_valid_z is not None and last_valid_z < 0.10: # If the last known z position is below 10 cm, initiate blind descent
                         steps_remaining = max(1, int(np.ceil(blind_descent / (blind_speed * dt))))
                         print(f"Tag lost at z={last_valid_z:.3f}m. Starting blind descent...")
                         state = "DESCENDING"
                         continue
+                    elif last_valid_rot is not None and tag_lost_time < max_tag_dropout: # If the tag has been lost for less than the maximum allowed dropout time, use the last known rotation and UV coordinates
+                        # Coast on EKF prediction and last known orientation if dropout < 0.5s
+                        rotation = last_valid_rot
+                        uv_noisy = last_valid_uv
                     else:
-                        print("Tag lost too far from target; aborting.")
+                        print(f"Tag lost for {tag_lost_time:.2f}s (>= {max_tag_dropout}s) or before first fix; aborting.")
                         break
+                else:
+                    tag_lost_time = 0.0 # Reset the tag lost timer since the tag is currently visible
+                    rotation, t, uv_noisy = seen  # Unpack current tag rotation matrix, translation vector, and 2D pixel corners
+                    last_valid_rot = rotation
+                    last_valid_uv = uv_noisy
 
-                rotation, t, uv_noisy = seen  # Unpack current tag rotation matrix, translation vector (3D position), and 2D pixel corners
+                est_cube_pos = cv_to_world.T @ (xc[:3] - cam_pos) # reexpress EKF cube world coordinates in camera frame
 
-                est_cube_pos = cv_to_world.T @ (xc[:3] - cam_pos) #reexpress cube world coordinates in camera frame
-
-                est_vel_cube = xc[3:6] #get estimated cube velocity from KF
-                est_vel_cam = cv_to_world.T @ est_vel_cube #cube velocity in camera frame
+                est_vel_cube = xc[3:6] # get estimated cube velocity from KF
+                est_vel_cam = cv_to_world.T @ est_vel_cube # cube velocity in camera frame
 
                 last_valid_z = est_cube_pos[2]  # Save current camera-frame depth (Z coordinate) to detect when the tag is close to the table
 
@@ -428,28 +442,28 @@ def run_pbvs(
                 nu = np.r_[v, omega]  # Concatenate linear (v) and angular (omega) components into a full 6D camera twist vector
                 nu[:3] *= min(1, vmax / (np.linalg.norm(nu[:3]) + 1e-9))  # Clamp linear velocity magnitude to max speed limit (vmax) for safety
 
-
-                q_target += camera_twist_to_dq(nu) * dt  # Map camera twist to joint velocities, integrate over dt, and update joint targets
-                command_arm(q_target)  # Was: data.ctrl[:6] = q_target (now routed through the joint-space state controller)
+                q_target += camera_twist_to_dq(nu, q_est) * dt  # Map camera twist to joint velocities using estimated state
+                command_arm(q_target, enc_pos)
 
                 error_norm = np.linalg.norm(e_t)  # Compute the Euclidean magnitude (distance) of the 3D position error
-                history.append((uv_noisy, error_norm))  # Store current 2D pixel corners and error norm for debugging/plotting later
+                if uv_noisy is not None:
+                    history.append((uv_noisy, error_norm))  # Store current 2D pixel corners and error norm for debugging/plotting later
 
                 if error_norm < tol and cube_stopped:
                     steps_remaining = max(1, int(np.ceil(blind_descent / (blind_speed * dt))))
                     print(f"Converged (error: {error_norm:.4f}m). Descending to grasp...")
-                    print(f"Cube NIS Mean: {np.mean(nis_cube):.4f}")
+                    valid_nis = [x for x in nis_cube if x is not None]
+                    if valid_nis:
+                        print(f"Cube NIS Mean: {np.mean(valid_nis):.4f}")
                     state = "DESCENDING"
 
             # --- STATE 2: BLIND DESCENT INTO GRASP POSITION ---
             elif state == "DESCENDING":
-                #cv_to_world = data.cam_xmat[camera_id].reshape(3, 3) @ np.diag([1, -1, -1])
-                cam_pos, cv_to_world = CameratoWorld(enc_pos)
                 nu = np.zeros(6)
                 nu[:3] = cv_to_world.T @ np.array([0, 0, -blind_speed])
 
-                q_target += camera_twist_to_dq(nu) * dt
-                command_arm(q_target)  # Was: data.ctrl[:6] = q_target
+                q_target += camera_twist_to_dq(nu, q_est) * dt
+                command_arm(q_target, enc_pos)
                 steps_remaining -= 1
 
                 if steps_remaining == 0:
@@ -459,8 +473,8 @@ def run_pbvs(
 
             # --- STATE 3: ACTIVATE GRIPPER ---
             elif state == "GRASPING":
-                data.eq_active[0] = 0 #remove cube and mocap weld so cube stops moving and can be picked up
-                command_arm(q_target)  # Keep holding the pose through the controller (was: nothing)
+                data.eq_active[0] = 0 # remove cube and mocap weld so cube stops moving and can be picked up
+                command_arm(q_target, enc_pos)  # Keep holding the pose through the controller
                 data.ctrl[gripper_actuator] = 255
                 steps_remaining -= 1
 
@@ -471,13 +485,11 @@ def run_pbvs(
 
             # --- STATE 4: BLIND LIFT / ASCENT ---
             elif state == "LIFTING":
-                #cv_to_world = data.cam_xmat[camera_id].reshape(3, 3) @ np.diag([1, -1, -1])
-                cam_pos, cv_to_world = CameratoWorld(enc_pos)
                 nu = np.zeros(6)
                 nu[:3] = cv_to_world.T @ np.array([0, 0, blind_speed])
 
-                q_target += camera_twist_to_dq(nu) * dt
-                command_arm(q_target)  # Was: data.ctrl[:6] = q_target
+                q_target += camera_twist_to_dq(nu, q_est) * dt
+                command_arm(q_target, enc_pos)
                 data.ctrl[gripper_actuator] = 255
                 steps_remaining -= 1
 
@@ -493,7 +505,7 @@ def run_pbvs(
 
                 # Smooth interpolation (LERP) from lift-end pose back to starting pose
                 q_target = (1 - alpha) * q_lift_end + alpha * q_init
-                command_arm(q_target)  # Was: data.ctrl[:6] = q_target
+                command_arm(q_target, enc_pos)
                 data.ctrl[gripper_actuator] = 255  # Maintain object grasp
 
                 if alpha >= 1.0:
@@ -502,7 +514,7 @@ def run_pbvs(
 
             # --- STATE 6: HOLD POSITION ---
             elif state == "HOLDING":
-                command_arm(q_target)  # Keep holding the pose through the controller (was: nothing)
+                command_arm(q_target, enc_pos)  # Keep holding the pose through the controller
                 data.ctrl[gripper_actuator] = 255
 
             k += 1
