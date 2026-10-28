@@ -32,7 +32,7 @@ def get_depth_map():
     renderer.disable_depth_rendering()
 
     # print(depth_map.dtype, depth_map.shape)
-    print (f"Depth Range: {np.nanmin(depth_map)} to {np.nanmax(depth_map)}")
+    # print (f"Depth Range: {np.nanmin(depth_map)} to {np.nanmax(depth_map)}")
 
     # add noise here? (from week 4 tut part 2)
     sigma = 0.0015 + 0.0022 * depth_true ** 2           # sigma_d grows with d^2
@@ -45,26 +45,24 @@ def point_cloud(depth_map, K, T_RC):
 
     # Camera instrinsics
     H, W = depth_map.shape[0], depth_map.shape[1] # should be H = 480 px, W = 640 px
-    f_px = (H / 2.0) / np.tan(np.deg2rad(model.cam_fovy[camera_id]) / 2) # camera lens focal length [px]
+    # f_px = (H / 2.0) / np.tan(np.deg2rad(model.cam_fovy[camera_id]) / 2) # camera lens focal length [px]
 
-    fu, fv = K[0, 0], K[1, 1]
-    u0, v0 = K[0, 2], K[1, 2]
-    fov_h = 2 * np.arctan(W / (2 * fu))
+    # fu, fv = K[0, 0], K[1, 1]
+    # u0, v0 = K[0, 2], K[1, 2]
+    # fov_h = 2 * np.arctan(W / (2 * fu))
 
-    # Pixel grid
-    uu, vv = np.meshgrid(np.arange(W), np.arange(H))
+    uu, vv = np.meshgrid(np.arange(W), np.arange(H)) # Pixel grid
     valid = np.isfinite(depth_map) & (depth_map > 0) # 2d mask to filter invalid depth values
     # something to account for: mujoco depth render and np.meshgrid may order pixels differently in their 2D array representations of the image
 
     # 2D pixel coordinates + corresponding depths in camera frame
-
-    # *** may need to change to account for different camera axis conventions
-    # *** scrapped implementaion, uses equation from week 4 tut part 1.3 which is disparity based
+    # from wk 4 tutorial part 1.3, scrapped because equations are disparity based
     # Z = depth_map[valid]
-    # X = ((uu[valid] - u0) * Z / f_px)
-    # Y = (-(vv[valid] - v0) * Z / f_px)
-    # pts = np.stack([X.ravel(), Y.ravel(), Z.ravel()], axis=1)
+    # X = (uu[valid] - u0) * Z / f_px
+    # Y = (-(vv[valid] - u0)) * Z / f_px
+    # points = np.stack([X.ravel(), Y.ravel(), Z.ravel()], axis=1)
 
+    # referencing week 4 tut part 2
     uu_valid = uu.ravel()[valid]
     vv_valid = vv.ravel()[valid]
     d_valid = depth_map.ravel()[valid]
@@ -73,17 +71,18 @@ def point_cloud(depth_map, K, T_RC):
 
     # Apply p_C = d K^(−1) [u v 1]^⊤ to define 3D cartesian points in physical space
     uv1 = np.stack([uu_valid, vv.valid, np.ones(valid.sum())], axis=1)
-    P_C = ((np.linalg.inv(K) @ uv1) * d_valid[None, :]).T
+    P_C = (np.linalg.inv(K) @ uv1) * d_valid
 
     # Convert to robot frame (right now, robot pose is from other files)
-    P_R = (T_RC * P_C).T
+    P_R = T_RC * P_C
 
-    return z_rgbd, P_C, P_R 
+    return P_C.T, P_R.T, z_rgbd
 
 # wip, still need to tailor to program
-def display_depth(points, colours=None, title='', frame='robot', ax=None,
+def display_depth(points, colours=None, title='', frame='camera', ax=None,
                elev=22, azim=-75, size=1, nmax=20000, seed=0):
     '''Reports smallest depth recorded and displays point cloud in camera (P_C)/robot frame (P_R)'''
+
     P = np.asarray(points)
     C = colours
     per_point = (C is not None and not isinstance(C, str)
@@ -96,12 +95,13 @@ def display_depth(points, colours=None, title='', frame='robot', ax=None,
         if per_point:
             C = C[k]
 
-    if frame == 'robot':          # x forward, y left, z up
-        A, B, Cc = P[:, 0], P[:, 1], P[:, 2]
-        labels = ('x fwd [m]', 'y left [m]', 'z up [m]')
-    else:                         # camera: x right, y down, z forward
+    if frame == 'camera':          # camera: x right, y up, -z forward
+        print(f"Minimum depth detected: {P[2].min()}")
         A, B, Cc = P[:, 0], P[:, 2], -P[:, 1]
-        labels = ('X right [m]', 'Z forward [m]', '-Y up [m]') # adjust to correspond to mujoco 
+        labels = ('X right [m]', '-Z forward [m]', 'Y up [m]')
+    else:                          # robot: x forward, y left, z up (may need to adjust)
+        A, B, Cc = P[:, 0], P[:, 1], P[:, 2]
+        labels = ('x fwd [m]', 'y left [m]', 'z up [m]') 
 
     if ax is None:
         fig = plt.figure(figsize=(6, 5))
