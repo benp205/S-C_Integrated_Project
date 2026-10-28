@@ -36,7 +36,7 @@ def get_depth_map():
 
     # add noise here? (from week 4 tut part 2)
     sigma = 0.0015 + 0.0022 * depth_true ** 2           # sigma_d grows with d^2
-    depth_map = depth_true + np.rng.normal(0, 1, depth_true.shape) * sigma
+    depth_map = depth_true + np.random.normal(0, 1, depth_true.shape) * sigma
 
     return depth_map
 

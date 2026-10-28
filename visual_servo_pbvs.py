@@ -9,6 +9,7 @@ from spatialmath import SE3, SO3
 import scene_setup as sc
 from cube_estimator import CubePositionEstimator
 from utils import getEncPosition, CameratoWorld, generate_random_spline_path, CameraJacobian
+from depthbased_object_localisation import get_depth_map, point_cloud
 
 # --- 1. INITIALIZATION & SCENE SETUP ---
 model, data, renderer, camera_id, enc_adr = sc.model, sc.data, sc.renderer, sc.camera_id, sc.enc_adr
@@ -285,7 +286,7 @@ def run_pbvs(
     lam=0.5, niter=4000, vmax=0.05, nsub=10, tol=0.010,
     blind_descent=0.15, blind_ascent=0.15, blind_speed=0.05, close_steps=30,
     return_steps=150,   # Number of steps to glide back home
-    max_tag_dropout=0.5, # Max time (seconds) to coast on EKF when tag is lost during TRACKING
+    max_tag_dropout=0.5, # Max time (seconds) to coast on KF when tag is lost during TRACKING
     controller=None,    # JointStateController; if None, q_target is sent straight to the actuators
 ):
     dt = nsub * model.opt.timestep
@@ -384,12 +385,32 @@ def run_pbvs(
             cv2.imshow("Wrist Camera - Pick View", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
             cv2.waitKey(1)
 
+            depth_map = get_depth_map()
+
             z_cube = None
+            t_depth = None
 
             if seen is not None: # only run measurement update if tag is visible
-                z_cube = cam_pos + cv_to_world @ seen[1] # reexpress tag position (cube position) from seen t in world frame
+                uv_noisy = seen[2] # aruco tag corners
+                u_f = np.mean(uv_noisy[0]) # centre of aruco tag
+                v_f = np.mean(uv_noisy[1])
+                u_centre = int(np.round(u_f)) #must be a whole number for the pixel coordinate
+                v_centre = int(np.round(v_f))
 
-            xc, Pc, nis_c = cube_est.step_cube(xc, Pc, z_cube, dt) # EKF step (predicts even when z_cube is None)
+                H, W = depth_map.shape # frame size, should be 640x480
+
+                t_cam = seen[1].copy() #translation backup if t_depth fails
+
+                if 0 <= u_centre < W and 0 <= v_centre < H: # check that cube centre is valid in the frame
+                    t_depth = depth_map[v_centre, u_centre]
+
+                    if t_depth is not None and t_depth > 0: # check t_depth is valid
+                        uv1_centre = np.array([u_centre, v_centre, 1])
+                        t_cam = t_depth * (np.linalg.inv(K_calib) @ uv1_centre) # from W4 lecture slides P^c = d * K^-1 [u, v, 1]^T
+                
+                z_cube = cam_pos + cv_to_world @ t_cam # reexpress tag position (cube top position) in world frame
+
+            xc, Pc, nis_c = cube_est.step_cube(xc, Pc, z_cube, dt) # KF step (predicts even when z_cube is None)
 
             est_cube_vel = np.linalg.norm(xc[3:5]) # cube's estimated velocity (not including z)
 
@@ -399,10 +420,6 @@ def run_pbvs(
             still_count += 1 if cube_slow == True else 0
 
             cube_stopped = True if still_count >= still_frames else False # if cube is stopped for a certain frame count
-
-            if state == "TRACKING":
-                cube_log.append((data.time, xc.copy(), data.body("target_cube").xpos.copy())) # only log in tracking state
-                nis_cube.append(nis_c)
 
             # --- STATE 1: VISUAL SERVOING TRACKING ---
             if state == "TRACKING":
@@ -414,7 +431,7 @@ def run_pbvs(
                         state = "DESCENDING"
                         continue
                     elif last_valid_rot is not None and tag_lost_time < max_tag_dropout: # If the tag has been lost for less than the maximum allowed dropout time, use the last known rotation and UV coordinates
-                        # Coast on EKF prediction and last known orientation if dropout < 0.5s
+                        # Coast on KF prediction and last known orientation if dropout < 0.5s
                         rotation = last_valid_rot
                         uv_noisy = last_valid_uv
                     else:
@@ -426,9 +443,10 @@ def run_pbvs(
                     last_valid_rot = rotation
                     last_valid_uv = uv_noisy
 
-                est_cube_pos = cv_to_world.T @ (xc[:3] - cam_pos) # reexpress EKF cube world coordinates in camera frame
+                est_cube_pos = cv_to_world.T @ (xc[:3] - cam_pos) # reexpress KF cube world coordinates in camera frame
 
-                est_vel_cube = xc[3:6] # get estimated cube velocity from KF
+                est_vel_cube = xc[3:6].copy() # get estimated cube velocity from KF
+                est_vel_cube[2] = 0.0 # ignore Z velocity for feed forward
                 est_vel_cam = cv_to_world.T @ est_vel_cube # cube velocity in camera frame
 
                 last_valid_z = est_cube_pos[2]  # Save current camera-frame depth (Z coordinate) to detect when the tag is close to the table
@@ -450,8 +468,12 @@ def run_pbvs(
                     history.append((uv_noisy, error_norm))  # Store current 2D pixel corners and error norm for debugging/plotting later
 
                 if error_norm < tol and cube_stopped:
-                    steps_remaining = max(1, int(np.ceil(blind_descent / (blind_speed * dt))))
-                    print(f"Converged (error: {error_norm:.4f}m). Descending to grasp...")
+                    if t_depth is not None and t_depth > 0: # check t_depth is valid
+                        descent_dist = t_depth - 0.1 # descent distance - 10cm offset for camera to gripper
+                    else:
+                        descent_dist = blind_descent # fallback
+                    steps_remaining = max(1, int(np.ceil(descent_dist / (blind_speed * dt))))
+                    print(f"Converged (error: {error_norm:.4f}m). Descending ({descent_dist:.4f}m) to grasp...")
                     valid_nis = [x for x in nis_cube if x is not None]
                     if valid_nis:
                         print(f"Cube NIS Mean: {np.mean(valid_nis):.4f}")
