@@ -9,7 +9,7 @@ observer for unmeasured states
 - - Ben Palmer > 25364542
 - - Julian Austin >
 - - Nick Stenger >
-- - Mary Tran > 
+- - Mary Tran > 25366345
 
 ## Install info
 Python 3.10+ Required
