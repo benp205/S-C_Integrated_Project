@@ -205,7 +205,6 @@
     <div class="columns is-centered">
       <div class="column is-full-width">
         <h2 class="title is-3">Results discussion and reflection</h2>
-
         <div class="content has-text-justified">
           <p>
             Overall the system demonstrates robust code via object position randomisation, and added noise to the camera feed to be acted upon. The overall system implements a KF filter which demonstrates low positional errors (highest ~4mm) for the cubes tracked position.
@@ -224,19 +223,45 @@
 </section>
 
 
-<section class="section" id="BibTeX">
+<section class="section" id="Contribution">
   <div class="container is-max-desktop content">
-    <h2 class="title">BibTeX</h2>
-    <pre><code>@article{park2021nerfies,
-  author    = {Park, Keunhong and Sinha, Utkarsh and Barron, Jonathan T. and Bouaziz, Sofien and Goldman, Dan B and Seitz, Steven M. and Martin-Brualla, Ricardo},
-  title     = {Nerfies: Deformable Neural Radiance Fields},
-  journal   = {ICCV},
-  year      = {2021},
-}</code></pre>
+    <h2 class="title">Individual Contributions</h2>
+    <div class="content has-text-justified">
+      <p>
+        Ben: Position Based Visual Servoing, Github page, Github README.md, Camera Calibration
+      </p>
+      <p>
+        Julian: KF Filter, Scene Setup, Random Cube Spline (utils.py), Depth based camera logic implementation
+      </p>
+      <p>
+        Mary: Depth based camera logic
+      </p>
+      <p>
+        Nick: Joint Space State Controller,
+      </p>
   </div>
 </section>
 
-
+<section class="section" id="Declaration">
+  <div class="gen-ai declaration">
+    <h2 class="title">Generative AI Declaration</h2>
+    <div class="content has-text-justified">
+      <p>
+        Ben: Used for refactoring code, removing unecessary functions (blind descent/ascent after depth implementation); evaluating errors from incorrect code;
+        and help with transitioning from a true state model to both noisy & encoded based on the joint space state controller, and a calculated image matrix rather than direct from mujoco;
+        Plotted graphs used AI to be generated in evaluate_runs to generate graphs based on the accumulated errors. 
+      </p>
+      <p>
+        Julian: 
+      </p>
+      <p>
+        Mary: 
+      </p>
+      <p>
+        Nick: 
+      </p>
+  </div>
+</section>
 <footer class="footer">
   <div class="container">
     <div class="content has-text-centered">
