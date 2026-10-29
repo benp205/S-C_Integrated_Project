@@ -1,26 +1,16 @@
-# 41014 Integrated Project - Track B
-## Task Description
-UR3 in MuJoCo with a wrist-mounted RGB-D
-camera. Detect a target object on a tabletop, plan an approach and execute a pick using IBVS or
-PBVS. Required: camera calibration; depth-based object localisation; state-space joint controller;
-observer for unmeasured states
-## Group information
-- Group 5
-- - Ben Palmer > 25364542
-- - Julian Austin >
-- - Nick Stenger >
-- - Mary Tran > 
+# Nerfies
 
-## Install info
-Python 3.10+ Required
+This is the repository that contains source code for the [Nerfies website](https://nerfies.github.io).
 
-All required dependencies:
-```bash
-pip install mujoco mujoco-menagerie numpy scipy opencv-python matplotlib spatialmath-python machinevision-toolbox-python
+If you find Nerfies useful for your work please cite:
+```
+@article{park2021nerfies
+  author    = {Park, Keunhong and Sinha, Utkarsh and Barron, Jonathan T. and Bouaziz, Sofien and Goldman, Dan B and Seitz, Steven M. and Martin-Brualla, Ricardo},
+  title     = {Nerfies: Deformable Neural Radiance Fields},
+  journal   = {ICCV},
+  year      = {2021},
+}
 ```
 
-## Run commands
-Explanation of how to run your code and what is expected to happen
-```bash
-python main.py
-```
+# Website License
+<a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
