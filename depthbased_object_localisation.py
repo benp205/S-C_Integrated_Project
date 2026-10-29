@@ -1,12 +1,14 @@
 # Libraries
 import numpy as np
 import matplotlib.pyplot as plt
+import mujoco.viewer
 import scene_setup as sc
+from camera_calibration import calibrate_camera, get_rgb, camera_twist_to_dq
 
 # Intended use pipeline:
 # Retrieve depth map --> Generate point cloud --> Report depths using point cloud-specified coordinates
 
-# Camera specs
+# Initialisation
 model, data, renderer, camera_id = sc.model, sc.data, sc.renderer, sc.camera_id
 
 def get_depth_map():
@@ -22,30 +24,32 @@ def get_depth_map():
 
     return depth_map
 
-def point_cloud(depth_map, K, T_RC):
-    '''Returns pixel-to-depth correspondence grid matrix + 3D cartesian point cloud in both camera and robot frames'''
+def point_cloud(depth_map, K, T_RC=None):
+    '''Returns pixel-to-depth correspondence grid matrix + 3D cartesian point cloud in camera (and robot ) frame.'''
 
     # Camera instrinsics
     H, W = depth_map.shape[0], depth_map.shape[1] # should be H = 480 px, W = 640 px
 
     uu, vv = np.meshgrid(np.arange(W), np.arange(H)) # Pixel grid
-    valid = np.isfinite(depth_map) & (depth_map > 0) # 2d mask to filter invalid depth values
+    valid = np.isfinite(depth_map.ravel()) & (depth_map.ravel() > 0) # 1d mask to filter invalid depth values
 
     # Referencing week 4 tut part 2
     uu_valid = uu.ravel()[valid]
     vv_valid = vv.ravel()[valid]
     d_valid = depth_map.ravel()[valid]
 
-    z_rgbd = np.stack([uu_valid, vv_valid, d_valid], axis=1) # z_rgbd = [u v d]^⊤
+    z_rgbd = np.stack([uu_valid, vv_valid, d_valid]) # z_rgbd = [u v d]^⊤
 
     # Apply p_C = d K^(−1) [u v 1]^⊤ to define 3D cartesian points in physical space
-    uv1 = np.stack([uu_valid, vv.valid, np.ones(valid.sum())], axis=1)
+    uv1 = np.stack([uu_valid, vv_valid, np.ones(valid.sum())])
     P_C = (np.linalg.inv(K) @ uv1) * d_valid
 
-    # Convert to robot frame (right now, robot pose is from other files)
-    P_R = T_RC * P_C
+    # Convert to robot frame if T_RC provided (right now, robot pose is reliant on other files)
+    if T_RC is not None:
+        P_R = T_RC * P_C
+        return P_C.T, P_R.T, z_rgbd
 
-    return P_C.T, P_R.T, z_rgbd
+    return P_C.T
 
 # Adapted from week 4 tut setup
 def display_depth(points, colours=None, title='', frame='camera', ax=None,
@@ -80,5 +84,25 @@ def display_depth(points, colours=None, title='', frame='camera', ax=None,
     ax.set_box_aspect(np.maximum([np.ptp(A), np.ptp(B), np.ptp(Cc)], 1e-3))
     ax.view_init(elev=elev, azim=azim)
     ax.set_title(title)
+    plt.show()
     return ax
 
+if __name__ == "__main__":
+    cloud = False
+    try:
+        with mujoco.viewer.launch_passive(model, data) as viewer:
+            
+            K_calib, dist_calib = calibrate_camera(camera_id, viewer=viewer)
+
+            while viewer.is_running():
+
+                depth_map = get_depth_map()
+                P_C = point_cloud(depth_map, K_calib)
+                if cloud == False:
+                    display_depth(P_C, colours='r', frame='camera', title='RGB-D cloud, camera frame')
+                    cloud = True
+        
+            viewer.close()
+        
+    finally:
+        renderer.close()
