@@ -1,6 +1,6 @@
 import numpy as np
 
-class CubePositionEstimator:
+class CubePositionEstimator: #kalman filter (not EKF since it's linear)
     def f_cube(self, xh, dt):
         #constant velocity model
         px, py, pz, vx, vy, vz = xh
@@ -27,16 +27,25 @@ class CubePositionEstimator:
                          [0, 0, 1, 0, 0, 0]]) #0px + 0py + 1pz + 0vx + 0vy + 0vz
 
     def step_cube(self, xh, P, z, dt):
-        sigma_p = 0.002 #2mm position variance
-        sigma_v = 0.005 #5mm/s velocity variance
+        sigma_p = 0.0001 #0.1mm std dev position
+        sigma_v = 0.0008 #0.8mm/s std dev velocity
 
-        Qd = np.diag([sigma_p**2, sigma_p**2, sigma_p**2, #position components
-                      sigma_v**2, sigma_v**2, sigma_v**2]) #velocity components
+        if xh is not None:
+            est_cube_vel = np.linalg.norm(xh[3:5])
+            scale = est_cube_vel / 0.02
+            if scale < 1:
+                scale = 1 #stop it going below tuned values
+            sigma_p = scale * sigma_p
+            sigma_v = scale * sigma_v
 
-        sigma_xy = 0.001 #std dev in x/y
-        sigma_z  = 0.002 #std dev in z
+        Qd = np.diag([sigma_p**2, sigma_p**2, (0.1 * sigma_p)**2, #position components, z is lower since z axis is stationary
+                      sigma_v**2, sigma_v**2, (0.1 * sigma_v)**2]) #velocity components
 
-        Rn = np.diag([sigma_xy**2, sigma_xy**2, sigma_z**2])
+        sigma_x = 0.00084 #std dev in x
+        sigma_y = 0.00084 #std dev in y
+        sigma_z = 0.00172 #std dev in z
+
+        Rn = np.diag([sigma_x**2, sigma_y**2, sigma_z**2])
 
         F = self.F_cube(dt)
         xh = self.f_cube(xh, dt)

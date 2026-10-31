@@ -82,7 +82,7 @@ def detect_tag_pose(rgb, K_matrix=None, dist_coeffs=None):
 
 # --- 4. MAIN PBVS & DEPTH-GUIDED PICK-AND-PLACE STATE MACHINE ---
 def run_pbvs(
-    lam=0.5, niter=4000, vmax=0.05, nsub=10, tol=0.010,
+    lam=0.5, niter=4000, vmax=0.10, nsub=10, tol=0.005,
     grasp_speed=0.05, lift_height=0.15, close_steps=30,
     return_steps=150,    # Number of steps to glide back home
     hold_steps=100,      # Number of steps to hold at home before closing window
@@ -151,9 +151,9 @@ def run_pbvs(
             controller.reset(q_target)  # Observer/command start at the measured home pose
 
         k = 0
-        # Initialize EKF state near the starting cube position
-        xc = np.array([start_pos[0], start_pos[1], start_pos[2] + 0.025, 0.0, 0.0, 0.0])
-        Pc = np.diag([0.5**2] * 3 + [0.05**2] * 3)
+        # Initialize KF state with initial guess and large uncertainty
+        xc = np.array([-0.10, 0.50, 0.05, 0.0, 0.0, 0.0]) # centre of frame approx initial guess, do not use ground truth
+        Pc = np.diag([0.5**2] * 3 + [0.05**2] * 3) # Wide initial uncertainty
 
         cube_log = [] # Log of cube positions over time
         nis_cube = [] # Log of normalized innovation squared for the cube
@@ -166,6 +166,8 @@ def run_pbvs(
 
         path_start_time = data.time
 
+        cube_nis_log = True
+
         while viewer.is_running():
             if k >= niter and state == "TRACKING":
                 print("PBVS iteration limit reached before convergence.")
@@ -176,6 +178,7 @@ def run_pbvs(
                 if time_cube >= total_duration:
                     data.eq_active[0] = 0  # Release mocap weld so cube stops and can be picked up
                     t_eval = total_duration
+                    cube_nis_log = False # Stop cube nis logging
                 else:
                     t_eval = time_cube
 
@@ -207,6 +210,8 @@ def run_pbvs(
             z_cube = None
             t_depth = None
 
+            cam_pos_kf, cv_to_world_kf = CameratoWorld(enc_pos) # do not feed q_est into KF, it is tuned for noisy encoder readings
+
             if seen is not None:  # Only run measurement update if tag is visible
                 uv_noisy = seen[2]  # ArUco tag corners
                 u_centre = int(np.round(np.mean(uv_noisy[0])))
@@ -222,10 +227,10 @@ def run_pbvs(
                         uv1_centre = np.array([u_centre, v_centre, 1.0])
                         t_cam = t_depth * (np.linalg.inv(K_calib) @ uv1_centre)
 
-                z_cube = cam_pos + cv_to_world @ t_cam  # Re-express tag position in world frame
+                z_cube = cam_pos_kf + cv_to_world_kf @ t_cam  # Re-express tag position in world frame
 
             xc, Pc, nis_c = cube_est.step_cube(xc, Pc, z_cube, dt)
-            if nis_c is not None:
+            if nis_c is not None and cube_nis_log == True: # Only log cube nis while cube is moving
                 nis_cube.append(nis_c)
 
             est_cube_vel = np.linalg.norm(xc[3:5])
@@ -235,7 +240,7 @@ def run_pbvs(
 
             # --- STATE 1: VISUAL SERVOING TRACKING ---
             if state == "TRACKING":
-                # Log EKF cube estimate vs ground truth while tracking the cube on the table
+                # Log KF cube estimate vs ground truth while tracking the cube on the table
                 true_cube_pos = data.qpos[cube_qadr:cube_qadr + 3].copy()
                 cube_log.append((data.time - path_start_time, xc.copy(), true_cube_pos))
 
@@ -276,7 +281,7 @@ def run_pbvs(
                     history.append((uv_noisy, error_norm))
 
                 if error_norm < tol and cube_stopped:
-                    # Use depth camera reading (or EKF camera-frame Z) minus 10cm camera-to-gripper offset
+                    # Use depth camera reading (or KF camera-frame Z) minus 10cm camera-to-gripper offset
                     measured_d = t_depth if (t_depth is not None and t_depth > 0) else (
                         last_valid_depth if last_valid_depth is not None else est_cube_pos[2]
                     )

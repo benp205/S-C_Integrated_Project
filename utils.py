@@ -8,11 +8,11 @@ def getEncPosition(data, enc_adr, enc_noise_std=0.001):
 
 def CameratoWorld(enc_pos): #replacement for cam_xpos
     #values from universal robotics website for the UR5e
-    T_baseto1 = SE3.Rz(enc_pos[0]) * SE3.Tz(0.1625) * SE3.Rx(np.pi / 2)
+    T_baseto1 = SE3.Rz(enc_pos[0]) * SE3.Tz(0.163) * SE3.Rx(np.pi / 2)
     T_1to2 = SE3.Rz(enc_pos[1]) * SE3.Tx(-0.425)
-    T_2to3 = SE3.Rz(enc_pos[2]) * SE3.Tx(-0.3922)
-    T_3to4 = SE3.Rz(enc_pos[3]) * SE3.Tz(0.1333) * SE3.Rx(np.pi / 2)
-    T_4to5 = SE3.Rz(enc_pos[4]) * SE3.Tz(0.0997) * SE3.Rx(-np.pi / 2)
+    T_2to3 = SE3.Rz(enc_pos[2]) * SE3.Tx(-0.392)
+    T_3to4 = SE3.Rz(enc_pos[3]) * SE3.Tz(0.134) * SE3.Rx(np.pi / 2)
+    T_4to5 = SE3.Rz(enc_pos[4]) * SE3.Tz(0.100) * SE3.Rx(-np.pi / 2)
     T_5to6 = SE3.Rz(enc_pos[5]) * SE3.Tz(0.0996)
                                                                  #camera offset 0.120m - 0.0996m
     T = T_baseto1 * T_1to2 * T_2to3 * T_3to4 * T_4to5 * T_5to6 * SE3(0, -0.06, 0.0204)
@@ -30,6 +30,8 @@ def generate_random_spline_path(start_pos=(-0.22, 0.42), x_bounds=(-0.22, 0.02),
     #random points within the bounds
     x_waypoints[1:] = np.random.uniform(x_bounds[0], x_bounds[1], num_waypoints - 1)
     y_waypoints[1:] = np.random.uniform(y_bounds[0], y_bounds[1], num_waypoints - 1)
+    #x_waypoints[1:] = [-0.04, -0.16, 0.00, -0.12] # static waypoints for testing
+    #y_waypoints[1:] = [0.58, 0.56, 0.52, 0.62]
 
     #speed per point, distance between points / speed
     seg_lengths = np.hypot(np.diff(x_waypoints), np.diff(y_waypoints)) #straight line length of each segment
@@ -43,6 +45,7 @@ def generate_random_spline_path(start_pos=(-0.22, 0.42), x_bounds=(-0.22, 0.02),
 
     yaw = np.random.uniform(0, np.pi / 4) #0-45 degree rotation
     mocap_yaw = [np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)] #rotate about z axis
+    #mocap_yaw = [0, 0, 0, 0] #static for testing
 
     return spline_x, spline_y, total_duration, mocap_yaw
 
@@ -52,11 +55,11 @@ def CameraJacobian(enc_pos):
     camera position, using only the UR5e analytical forward kinematics (SE3)
     and estimated/measured joint angles. No MuJoCo model/data references used.
     '''
-    T0 = SE3.Rz(enc_pos[0]) * SE3.Tz(0.1625) * SE3.Rx(np.pi / 2)
+    T0 = SE3.Rz(enc_pos[0]) * SE3.Tz(0.163) * SE3.Rx(np.pi / 2)
     T1 = T0 * SE3.Rz(enc_pos[1]) * SE3.Tx(-0.425)
-    T2 = T1 * SE3.Rz(enc_pos[2]) * SE3.Tx(-0.3922)
-    T3 = T2 * SE3.Rz(enc_pos[3]) * SE3.Tz(0.1333) * SE3.Rx(np.pi / 2)
-    T4 = T3 * SE3.Rz(enc_pos[4]) * SE3.Tz(0.0997) * SE3.Rx(-np.pi / 2)
+    T2 = T1 * SE3.Rz(enc_pos[2]) * SE3.Tx(-0.392)
+    T3 = T2 * SE3.Rz(enc_pos[3]) * SE3.Tz(0.134) * SE3.Rx(np.pi / 2)
+    T4 = T3 * SE3.Rz(enc_pos[4]) * SE3.Tz(0.100) * SE3.Rx(-np.pi / 2)
     T5 = T4 * SE3.Rz(enc_pos[5]) * SE3.Tz(0.0996)
     T_cam = T5 * SE3(0, -0.06, 0.0204) # Camera frame relative to the last link frame
 
