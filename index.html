@@ -209,7 +209,13 @@
             also demonstrates robustness, with the average error being ~0.6 degrees. Larger jumps are seen when picking the cube up, as the velocity and acceleration are no longer smooth as during tracking, and attempt to approach the max velocity. 
           </p>
           <p>
-            Potential fixes & improvements for the system:...
+            Potential fixes & improvements for the system: Implmentation of a quintic polynomial approach for trajectory generation, rather than a trapezoidal/fastest approach could reduce jerk on the system and potential physical errors; 
+            Implementation of an extended kalman filter could allow further filtering of errors if the cube were to be moving at higher velocity, improving results even under more camera frame noise.
+          </p>
+          <p>
+            The integration of a LQR controller with visual servoing & KF estimation proved to be robust and autonomous for the provided pick task under a camera with slight noise. The robustness against measurement noise highlighted benefits of decoupling 
+            state estimation from reference generation. However, the primary limitation lies in the current state machine boundaries, where large disturbances to error can be observed due to the quick changes in robot position. Further improvement could be made to 
+            unify the tracking and grasping tasks into a more continuous framework (Quintic Polynomial) to ensure state and input constraints remain smooth under different conditions, from tracking to payload picking. 
           </p>
         </div>
       </div>
