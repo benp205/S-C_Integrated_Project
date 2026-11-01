@@ -8,7 +8,7 @@ observer for unmeasured states
 - Group 5
 - - Ben Palmer > 25364542
 - - Julian Austin > 25991454
-- - Nick Stenger >
+- - Nick Stenger > 24951244
 - - Mary Tran > 25366345
 
 ## Install info
