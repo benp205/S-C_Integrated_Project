@@ -222,6 +222,212 @@
     </div>
     <!--/ Concurrent Work. -->
 
+    <!-- No Feedforward vs Feedforward PBVS -->
+    <div>
+      <div class="columns is-centered">
+        <!-- Left: Normal Trajectory -->
+        <div class="column is-half">
+          <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <img src="./static/images/2cm_tcp_vs_cube_no_feedforward.png" alt="No Feedforward" style="border-radius: 8px; width: 100%; display: block;" />
+          </div>
+        </div>
+
+        <!-- Right: Forced Tag Dropout -->
+        <div class="column is-half">
+          <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <img src="./static/images/2cm_tcp_vs_cube.png" alt="Feedforward" style="border-radius: 8px; width: 100%; display: block;" />
+          </div>
+        </div>
+      </div>
+      <p>
+        Initially our robot gripper would lag behind the cube by a significant amount as PBVS was acting on its own error, meaning it has to fall behind to generate movement. By feeding the cubes estimated velocity from the KF, we make the end of the robot move at 
+        the cubes estimated velocity, leaving the error to handle small disturbances instead of the entire arm movement. This greatly increased the ability of the robot to follow the cube while it moved across the table.
+      </p>
+    </div>
+    <!-- No Feedforward vs Feedforward PBVS -->
+
+  <!--/ Kalman Filter Section -->
+  <div class="columns is-centered mt-6">
+    <div class="column is-full-width">
+      <h2 class="title is-3">Kalman Filter</h2>
+      <div class="content has-text-justified">
+        <p>
+          A linear Kalman filter was implemented to track the cubes estimates position and velocity in the world frame. Measurements were taken from the ArUco tag centre, back projected using RGB-D depth and the calibrated intrinsics, these coordinates in the 
+          camera frame were then transformed to the world frame via forward kinematics at the noisy joint angles. The filters main role is assisting the controller by mitigating measurement noise from the camera, estimating the cubes unmeasured velocity which 
+          feeds the PBVS feed forward, and knowing when the cube is stopped so we can initiate our pick.
+        </p>
+        <p>
+          The filter was tuned by adjusting the measurement noise variance R across all axes and targeting approximately 95% of estimation errors within the 2sigma bound, process noise variance Q was tuned to target a NIS of 3 at the constant cube speed of 
+          2cm/s. To handle dynamic velocities, the process noise covariance matrix was scaled linearly with the estimated velocity from the filter.
+        </p>
+          
+        <h3 class="title is-4">Results</h3>
+
+        <div class="columns is-centered">
+          <!-- Left: Normal Trajectory -->
+          <div class="column is-half">
+            <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+              <img src="./static/images/2cm_gt_vs_est_cube.png" alt="Nominal Tracking Performance" style="border-radius: 8px; width: 100%; display: block;" />
+              <p class="has-text-centered" style="margin-top: 10px; font-size: 0.9rem; color: #4a5568;">
+                <b>Normal Tracking:</b> Standard 2cm/s cube speed trajectory tracking
+              </p>
+            </div>
+          </div>
+
+          <!-- Right: Forced Tag Dropout -->
+          <div class="column is-half">
+            <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+              <img src="./static/images/2cm_gt_vs_est_cube_forced_tag_dropout.png" alt="Forced Tag Dropout Performance" style="border-radius: 8px; width: 100%; display: block;" />
+              <p class="has-text-centered" style="margin-top: 10px; font-size: 0.9rem; color: #4a5568;">
+                <b>Tag Dropout:</b> Forced tag dropout for 4s, KF coasts based on predicition
+              </p>
+            </div>
+          </div>
+        </div>
+
+          <p>
+            From these plots taken during a PBVS run we can see that our KF tracks the cubes position well, with minimal deviation from the true path. In the event of the cameras view of the tag being obstructed, the KF coasts on its own prediction.
+          </p>
+
+          <p>
+            The filter was tested by parking the arm at its hover position height used for visual servoing, the cube was then moved along a random spline path within the frame. The averages across 10 runs with randomised paths between every run and varying cube 
+            speeds were taken to see the performance trade-offs between static tuning and velocity scaling. A NIS value of around 3 is ideal with approximately 95% (0.95) of our errors being within the 2sigma bounds for each axis.
+          </p>
+
+          <!-- KF Results Table -->
+          <div class="table-container">
+            <table class="table is-bordered is-striped is-fullwidth has-text-centered">
+              <thead>
+                <tr>
+                  <th>Cube Velocity</th>
+                  <th>Q Scaled w/Velocity</th>
+                  <th>X Within</th>
+                  <th>Y Within</th>
+                  <th>Z Within</th>
+                  <th>Avg NIS</th>
+                  <th>Avg Position Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>2 cm/s</td>
+                  <td>No</td>
+                  <td>0.93</td>
+                  <td>0.93</td>
+                  <td>0.92</td>
+                  <td>3.01</td>
+                  <td>0.7 mm</td>
+                </tr>
+                <tr>
+                  <td>2 cm/s</td>
+                  <td>Yes</td>
+                  <td>0.94</td>
+                  <td>0.94</td>
+                  <td>0.94</td>
+                  <td>3.02</td>
+                  <td>1.0 mm</td>
+                </tr>
+                <tr>
+                  <td>4 cm/s</td>
+                  <td>No</td>
+                  <td>0.62</td>
+                  <td>0.88</td>
+                  <td>0.96</td>
+                  <td>3.96</td>
+                  <td>0.5 mm</td>
+                </tr>
+                <tr>
+                  <td>4 cm/s</td>
+                  <td>Yes</td>
+                  <td>0.83</td>
+                  <td>0.92</td>
+                  <td>0.96</td>
+                  <td>3.23</td>
+                  <td>0.8 mm</td>
+                </tr>
+                <tr>
+                  <td>8 cm/s</td>
+                  <td>No</td>
+                  <td>0.21</td>
+                  <td>0.40</td>
+                  <td>0.94</td>
+                  <td>17.83</td>
+                  <td>1.8 mm</td>
+                </tr>
+                <tr>
+                  <td>8 cm/s</td>
+                  <td>Yes</td>
+                  <td>0.74</td>
+                  <td>0.89</td>
+                  <td>0.95</td>
+                  <td>4.68</td>
+                  <td>1.1 mm</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+
+
+          <!-- 2cm/s 2sigma Plot -->
+          <div class="columns is-centered">
+            <div class="column is-three-quarters">
+              <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                <img src="./static/images/2cm_q_scaled_fig.png" alt="2cm/s 2sig Plot" style="border-radius: 8px; width: 100%; display: block;" />
+                <p class="has-text-centered" style="margin-top: 10px; font-size: 0.9rem; color: #4a5568;">
+                  2cm/s with Q scaling errors within 2sigma plot
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Table + Plot Discussion -->
+          <p>
+            At low cube speeds of 2cm/s both configurations achieve near identical performance and consistency across the 10 runs. When subjected to 8cm/s speeds without scaling, the static tuned filter becomes severely overconfident which can be seen in our high 
+            NIS average of 17.83 and low X axis coverage of 0.21 (21%).
+          </p>
+          <p>
+            By scaling the process noise covariance matrix with our estimated velocity, we are able to dynamically adjust the filter to account for the increase in speed. While it does not bring our NIS and coverage back to perfect levels, they are significantly 
+            better with a NIS of 4.68 and X axis coverage of 0.74 (74%). At the lower cube speeds of 2cm/s and 4cm/s, our unscaled filter has lower average position error at 0.7mm vs 1mm for 2cm/s and 0.5mm vs 0.8mm for 4cm/s. While this may look like a good result 
+            for our 4cm/s, the X axis coverage of 0.62 (62%) shows us that it is overconfident and its uncertainty can't be trusted.
+          <p>
+            Due to the cube sitting on the flat table surface, we have little variation in our Z axis coverage despite the changes in cube speed.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <div class="content has-text-justified">
+        </div>
+          <div class="columns is-centered">
+            <!-- Left: 8cm/s Velocity Scaled -->
+            <div class="column is-half">
+              <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                <img src="./static/images/8cm_q_scaled_fig.png" alt="8cm/s Scaled" style="border-radius: 8px; width: 100%; display: block;" />
+                <p class="has-text-centered" style="margin-top: 10px; font-size: 0.9rem; color: #4a5568;">
+                  <b>8cm/s Scaled:</b> Average error is within 1-2mm on X, Y, and Z. 
+                </p>
+              </div>
+            </div>
+
+            <!-- Right: 8cm/s Unscaled -->
+            <div class="column is-half">
+              <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                <img src="./static/images/8cm_q_not_scaled_fig.png" alt="8cm/s Unscaled" style="border-radius: 8px; width: 100%; display: block;" />
+                <p class="has-text-centered" style="margin-top: 10px; font-size: 0.9rem; color: #4a5568;">
+                  <b>8cm/s Unscaled:</b> Severely overconfident filter with errors up to 7.5mm in the X axis, over 4mm in the Y axis, the Z axis remains consistend with other trials at ~1mm.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!--/ Kalman Filter Section -->
+    
+
   </div>
 </section>
 
