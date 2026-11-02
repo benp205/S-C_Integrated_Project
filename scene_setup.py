@@ -66,6 +66,7 @@ robot_spec = mm.get("universal_robots_ur5e").spec()
 gripper_spec = mm.get("robotiq_2f85").spec()
 
 gripper_base = gripper_spec.body("base_mount")
+gripper_base.add_site(name="tcp", pos=[0, 0, 0.14], size=[0.01, 0, 0], rgba=[0, 0, 0, 0]) #tool centre point of grippers, invisible, used for logging
 robot_attach_site = robot_spec.site("attachment_site")
 robot_attach_site.attach_body(gripper_base, prefix="gripper_") #attach gripper base to robot arm at attachment site
 

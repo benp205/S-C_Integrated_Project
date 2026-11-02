@@ -30,8 +30,10 @@ def generate_random_spline_path(start_pos=(-0.22, 0.42), x_bounds=(-0.22, 0.02),
     #random points within the bounds
     x_waypoints[1:] = np.random.uniform(x_bounds[0], x_bounds[1], num_waypoints - 1)
     y_waypoints[1:] = np.random.uniform(y_bounds[0], y_bounds[1], num_waypoints - 1)
-    #x_waypoints[1:] = [-0.04, -0.16, 0.00, -0.12] # static waypoints for testing
+    #x_waypoints[1:] = [-0.04, -0.16, 0.00, -0.12] # static short waypoints for testing, set num_waypoints=5
     #y_waypoints[1:] = [0.58, 0.56, 0.52, 0.62]
+    #x_waypoints[1:] = [-0.15, -0.08, -0.18, -0.05, -0.12, -0.02, -0.10, -0.19, -0.06] # static long waypoints for testing, set num_waypoints=10
+    #y_waypoints[1:] = [0.45,  0.52,  0.48,  0.55,  0.43,  0.50,  0.56,  0.46,  0.53]
 
     #speed per point, distance between points / speed
     seg_lengths = np.hypot(np.diff(x_waypoints), np.diff(y_waypoints)) #straight line length of each segment

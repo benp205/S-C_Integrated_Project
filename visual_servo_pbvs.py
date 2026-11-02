@@ -158,6 +158,7 @@ def run_pbvs(
         cube_log = [] # Log of cube positions over time
         nis_cube = [] # Log of normalized innovation squared for the cube
         joint_log = [] # Log of joint positions over time
+        gripper_log = []
 
         cube_stopped = False
         cube_vel_stop = 0.002  # Cube velocity threshold (m/s)
@@ -211,6 +212,10 @@ def run_pbvs(
             t_depth = None
 
             cam_pos_kf, cv_to_world_kf = CameratoWorld(enc_pos) # do not feed q_est into KF, it is tuned for noisy encoder readings
+            
+            # simulate tag dropout for 4 seconds (for reporting purposes)
+            #if time_cube > 10 and time_cube < 14:
+            #    seen = None
 
             if seen is not None:  # Only run measurement update if tag is visible
                 uv_noisy = seen[2]  # ArUco tag corners
@@ -243,6 +248,8 @@ def run_pbvs(
                 # Log KF cube estimate vs ground truth while tracking the cube on the table
                 true_cube_pos = data.qpos[cube_qadr:cube_qadr + 3].copy()
                 cube_log.append((data.time - path_start_time, xc.copy(), true_cube_pos))
+                gripper_pos = data.site_xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "robot_gripper_tcp")].copy()
+                gripper_log.append(gripper_pos)
 
                 if seen is None:
                     tag_lost_time += dt
@@ -371,7 +378,7 @@ def run_pbvs(
     run_pbvs.last_joint_log = joint_log
     run_pbvs.last_nis = nis_cube
 
-    return history, first_rgb, cube_log
+    return history, first_rgb, cube_log, gripper_log
 
 
 # --- 5. VISUALIZATION ---
@@ -391,12 +398,59 @@ def plot_on_image(history, rgb, save_path=None):
     plt.show()
     plt.close(fig)
 
+def plot_cube_tracking(cube_log, gripper_log):
+    if not cube_log:
+        print("No log data to plot!")
+        return
+
+    times = np.array([entry[0] for entry in cube_log])
+    est_states = np.array([entry[1] for entry in cube_log]) # [x, y, z, vx, vy, vz] KF est positions and velocity
+    true_poses = np.array([entry[2] for entry in cube_log]) # [x, y, z] ground truth positions
+    est_pos = est_states[:, :3] # get X, Y, Z positions for plotting
+    gripper_poses = np.vstack(gripper_log)
+    gripper_times = times
+
+    # --- FIGURE 1: Top-Down 2D Trajectory (X vs Y) ---
+    plt.figure(figsize=(8, 7))
+    plt.plot(true_poses[:, 0], true_poses[:, 1], 'k--', label='True Cube Path (GT)', linewidth=2)
+    plt.plot(est_pos[:, 0], est_pos[:, 1], 'b-', label='KF Estimated Cube Path', linewidth=1.5)
+
+    plt.xlabel('X Position [m]', fontsize=12)
+    plt.ylabel('Y Position [m]', fontsize=12)
+    plt.title('Tracking Performance: GT vs Est Cube Trajectory', fontsize=14, fontweight='bold')
+    plt.legend(loc='best', fontsize=10)
+    plt.grid(True, linestyle=':', alpha=0.7)
+    plt.axis('equal')
+    plt.tight_layout()
+    plt.show()
+
+    # --- FIGURE 2: Time-Series Comparison (X, Y, Z vs Time) ---    
+    fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+    labels = ['X Position [m]', 'Y Position [m]', 'Z Position [m]']
+
+    for i in range(3):
+        axes[i].plot(times, true_poses[:, i], 'k--', label='True Cube', linewidth=1.5)
+        axes[i].plot(times, est_pos[:, i], 'b-', label='KF Estimated Cube', linewidth=1.5)
+        
+        if gripper_poses is not None:
+            axes[i].plot(gripper_times, gripper_poses[:, i], 'r-', label='Gripper TCP', linewidth=1.5)
+            
+        axes[i].set_ylabel(labels[i], fontsize=10)
+        axes[i].legend(loc='upper right', fontsize=9)
+        axes[i].grid(True, linestyle=':', alpha=0.7)
+
+    axes[-1].set_xlabel('Time [s]', fontsize=12)
+    plt.suptitle('Position Tracking Over Time (Cube vs Arm Gripper): 2cm/s Cube Speed', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
     try:
-        history, first_rgb, cube_log = run_pbvs()
+        history, first_rgb, cube_log, gripper_log = run_pbvs()
         print(f"{len(history)} visual tracking steps executed.")
         if history:
             plot_on_image(history, first_rgb)
+        if cube_log:
+            plot_cube_tracking(cube_log, gripper_log)
     finally:
         renderer.close()
