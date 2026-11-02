@@ -20,7 +20,11 @@ pip install mujoco mujoco-menagerie numpy scipy opencv-python matplotlib spatial
 ```
 
 ## Run commands
-Explanation of how to run your code and what is expected to happen
+Running main.py shows the normal simulation with a small randomisation to joint encoder read positions, alongside small camera errors.
 ```bash
 python main.py
+```
+Running evaluate_runs.py creates graphs based on 5 separate trials. Used to demonstrate the consistency of the system and save graphs for the github page.
+```bash
+python evaluate_runs.py
 ```
