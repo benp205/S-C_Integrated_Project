@@ -7,7 +7,7 @@ def getEncPosition(data, enc_adr, enc_noise_std=0.001):
     return enc_pos_true + np.random.normal(0, enc_noise_std, 6)
 
 def CameratoWorld(enc_pos): #replacement for cam_xpos
-    #values from universal robotics website for the UR5e
+    #values from mujoco menagerie ur5 xml (previously from UR website but mujoco is slightly different)
     T_baseto1 = SE3.Rz(enc_pos[0]) * SE3.Tz(0.163) * SE3.Rx(np.pi / 2)
     T_1to2 = SE3.Rz(enc_pos[1]) * SE3.Tx(-0.425)
     T_2to3 = SE3.Rz(enc_pos[2]) * SE3.Tx(-0.392)
