@@ -1,6 +1,7 @@
 # Libraries
 import numpy as np
 import matplotlib.pyplot as plt
+import open3d as o3d
 import mujoco.viewer
 import scene_setup as sc
 from camera_calibration import calibrate_camera, get_rgb, camera_twist_to_dq
@@ -11,6 +12,46 @@ from camera_calibration import calibrate_camera, get_rgb, camera_twist_to_dq
 # Initialisation
 model, data, renderer, camera_id = sc.model, sc.data, sc.renderer, sc.camera_id
 
+# Adapted from week 4 tut setup
+def display_depth(points, colours=None, title='', frame='camera', ax=None,
+               elev=22, azim=-75, size=1, nmax=20000, seed=0):
+    '''Displays point cloud in camera (P_C)/robot frame (P_R)'''
+
+    P = np.asarray(points)
+    C = colours
+    per_point = (C is not None and not isinstance(C, str)
+                 and np.asarray(C).ndim >= 1 and np.asarray(C).shape[0] == P.shape[0])
+    if per_point:
+        C = np.asarray(C)
+    if len(P) > nmax:
+        k = np.random.default_rng(seed).choice(len(P), nmax, replace=False)
+        P = P[k]
+        if per_point:
+            C = C[k]
+
+    if frame == 'camera':          # Camera: x right, y up, -z forward
+        A, B, Cc = P[:, 0], P[:, 2], -P[:, 1]
+        labels = ('X right [m]', '-Z forward [m]', 'Y up [m]')
+    else:                          # Robot: x forward, y left, z up ***
+        A, B, Cc = P[:, 0], P[:, 1], P[:, 2]
+        labels = ('x fwd [m]', 'y left [m]', 'z up [m]') 
+
+    if ax is None:
+        fig = plt.figure(figsize=(6, 5))
+        ax = fig.add_subplot(projection='3d')
+    ax.scatter(A, B, Cc, c=C, s=size, marker='.', linewidths=0)
+    ax.set_xlabel(labels[0]); ax.set_ylabel(labels[1]); ax.set_zlabel(labels[2])
+    ax.set_box_aspect(np.maximum([np.ptp(A), np.ptp(B), np.ptp(Cc)], 1e-3))
+    ax.view_init(elev=elev, azim=azim)
+    ax.set_title(title)
+    plt.show()
+    return ax
+
+# From week 4 tut setup
+def cloud_stats(name, pcd):
+    print(f'{name:24s} {len(pcd.points):8d} points')
+
+
 def get_depth_map():
     '''Renders and returns the current depth map from the wrist-mounted camera.'''
     renderer.enable_depth_rendering()
@@ -19,13 +60,13 @@ def get_depth_map():
     renderer.disable_depth_rendering()
 
     # Add noise here (from week 4 tut part 2)
-    sigma = 0.0015 + 0.0022 * depth_true ** 2           # sigma_d grows with d^2
+    sigma = 0.0015 + 0.0022 * depth_true ** 2 # sigma_d grows with d^2
     depth_map = depth_true + np.random.normal(0, 1, depth_true.shape) * sigma
 
     return depth_map
 
 def point_cloud(depth_map, K, T_RC=None):
-    '''Returns pixel-to-depth correspondence grid matrix + 3D cartesian point cloud in camera (and robot ) frame.'''
+    '''Returns pixel-to-depth correspondence grid matrix + 3D cartesian point cloud in camera (and robot) frame.'''
 
     # Camera instrinsics
     H, W = depth_map.shape[0], depth_map.shape[1] # should be H = 480 px, W = 640 px
@@ -52,40 +93,51 @@ def point_cloud(depth_map, K, T_RC=None):
     return P_C.T
 
 # Adapted from week 4 tut setup
-def display_depth(points, colours=None, title='', frame='camera', ax=None,
-               elev=22, azim=-75, size=1, nmax=20000, seed=0):
-    '''Reports smallest depth recorded and displays point cloud in camera (P_C)/robot frame (P_R)'''
+def object_id(point_cloud, voxel=0.005, nb=20, std_ratio=2.0, 
+              roi=o3d.geometry.AxisAlignedBoundingBox(min_bound=(-0.60, -0., 0.20),
+                                                      max_bound=(0.60, 0.5, 0.60)),
+              plane_thresh=0.01, above=0.01, eps=0.02, min_points=30,
+              verbose=True):
+    """Downsample, denoise, crop, fit the support plane, cluster what sits on it."""
 
-    P = np.asarray(points)
-    C = colours
-    per_point = (C is not None and not isinstance(C, str)
-                 and np.asarray(C).ndim >= 1 and np.asarray(C).shape[0] == P.shape[0])
-    if per_point:
-        C = np.asarray(C)
-    if len(P) > nmax:
-        k = np.random.default_rng(seed).choice(len(P), nmax, replace=False)
-        P = P[k]
-        if per_point:
-            C = C[k]
+    # convert 3D point coordinate array to Open3D PointCloud object
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(point_cloud)
 
-    if frame == 'camera':          # Camera: x right, y up, -z forward
-        print(f"Minimum depth detected: {P[2].min()}")
-        A, B, Cc = P[:, 0], P[:, 2], -P[:, 1]
-        labels = ('X right [m]', '-Z forward [m]', 'Y up [m]')
-    else:                          # Robot: x forward, y left, z up ***
-        A, B, Cc = P[:, 0], P[:, 1], P[:, 2]
-        labels = ('x fwd [m]', 'y left [m]', 'z up [m]') 
+    down = pcd.voxel_down_sample(voxel)
+    clean, keep_idx = down.remove_statistical_outlier(nb_neighbors=nb, std_ratio=std_ratio)
+    work = clean.crop(roi)
+    removed = down.select_by_index(keep_idx, invert=True) # restricts anaylsis to 
 
-    if ax is None:
-        fig = plt.figure(figsize=(6, 5))
-        ax = fig.add_subplot(projection='3d')
-    ax.scatter(A, B, Cc, c=C, s=size, marker='.', linewidths=0)
-    ax.set_xlabel(labels[0]); ax.set_ylabel(labels[1]); ax.set_zlabel(labels[2])
-    ax.set_box_aspect(np.maximum([np.ptp(A), np.ptp(B), np.ptp(Cc)], 1e-3))
-    ax.view_init(elev=elev, azim=azim)
-    ax.set_title(title)
-    plt.show()
-    return ax
+    plane, inliers = work.segment_plane(plane_thresh, 3, 500)
+    plane = np.array(plane)
+    if plane[2] > 0:
+        plane = -plane
+    pts = np.asarray(work.points)
+    sd = pts @ plane[:3] + plane[3]
+    objects = work.select_by_index(np.flatnonzero(sd > above))
+
+    # if point cloud is reduced to the point of unusability, return empty result
+    if objects.is_empty():
+        print("No objects found above the table.")
+        return plane, [], None, None
+
+    labels = np.array(objects.cluster_dbscan(eps=eps, min_points=min_points))
+    obj_pts = np.asarray(objects.points)
+    out = []
+    for i in range(labels.max() + 1):
+        p = obj_pts[labels == i]
+        out.append(dict(n=len(p), centroid=p.mean(axis=0), extent=p.max(axis=0) - p.min(axis=0)))
+    out.sort(key=lambda o: o['centroid'][0])
+
+    if verbose:
+        print(f'{len(pcd.points):>7} points in, {len(work.points):>6} in the workspace, '
+              f'table at z = {-plane[3] / plane[2]:.3f} m, {len(out)} objects')
+        for i, o in enumerate(out):
+            print(f'   object {i}: {o["n"]:>5} points, centroid {np.round(o["centroid"], 3)}, '
+                  f'size {np.round(o["extent"], 3)}\n')
+            
+    return plane, out, objects, labels
 
 if __name__ == "__main__":
     cloud = False
@@ -100,6 +152,7 @@ if __name__ == "__main__":
                 P_C = point_cloud(depth_map, K_calib)
                 if cloud == False:
                     display_depth(P_C, colours='r', frame='camera', title='RGB-D cloud, camera frame')
+                    object_id(P_C)
                     cloud = True
         
             viewer.close()
