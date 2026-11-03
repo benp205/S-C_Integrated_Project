@@ -568,7 +568,50 @@
     </div>
 </section>
 
-
+<!--/ Depth Based Object Localisation Section -->
+<section class="section" id="DBOL">
+  <div class="container is-max-desktop content">
+    <h2 class="title">Depth Based Object Localisation</h2>
+    <div class="content has-text-justified">
+      <p> 
+        The system uses depth based object localisation via depth map processing to produce a point cloud, then cloud processing plane segmentation using RANSAC, 
+        and DBSCAN to identify objects in physical space as well as determine the descent distance for the end effector to stably clamp the cube.
+        Cloud processing, table depth, identified objects and calculated attributes are reported in the terminal.
+        Original implementation used only RGB-D depth measurements to determine the extent of the descent, whereas the latest method accounts for noise during
+        cloud processing and bases descent distance on calculations of the cube's geometry.
+      </p>
+      <!-- Top Left: Point Cloud General View -->
+      <div class="column is-half">
+        <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+          <img src="./static/images/point_cloud.png" alt="PBVS 3D Translational Error Convergence" style="border-radius: 8px; width: 100%; display: block;" />
+        </div>
+      </div>
+      <!-- Top Right: Point Cloud Head-on View -->
+      <div class="column is-half">
+        <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+          <img src="./static/images/point_cloud_view_headon.png" alt="PBVS Tag Corner Trajectories" style="border-radius: 8px; width: 100%; display: block;" />
+        </div>
+      </div>
+      <!-- Bottom Left: Point Cloud Side View -->
+      <div class="column is-half">
+        <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+          <img src="./static/images/point_cloud_view_s.png" alt="PBVS 3D Translational Error Convergence" style="border-radius: 8px; width: 100%; display: block;" />
+        </div>
+      </div>
+      <!-- Bottom Right: Point Cloud Top View -->
+      <div class="column is-half">
+        <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+          <img src="./static/images/point_cloud_view_t.png" alt="PBVS Tag Corner Trajectories" style="border-radius: 8px; width: 100%; display: block;" />
+        </div>
+      </div>
+      <p>
+        For further improvement, geometry metrics other than the z-component of the centroid of identified objects could be used to verify their position relative to the end effector and make
+        slight adjustments of the end effector's position along the x and y axes for higher precision. Furthermore, plotted comparisons to ground truth and previous depth-only method should be
+        implemented to quantitatively evaluate the accuracy of the current implementation.
+      </p>
+    </div>
+</section>
+<!--/ Depth Based Object Localisation Section -->
 
   
 <section class="section" id="Contribution">
@@ -582,7 +625,7 @@
         Julian: KF Filter, Scene Setup, Random Cube Spline (utils.py), Depth based camera logic implementation
       </p>
       <p>
-        Mary: Depth based camera logic
+        Mary: RGB-depth camera logic, Depth Based Object Localisation output & implementation
       </p>
       <p>
         Nick: Joint Space State Controller, Demo Video
@@ -605,7 +648,7 @@
       </p>
       <p>
         Mary: Used for finding information on mujoco camera conventions, explanations of tutorial code to inform application of certain code structures in program (appication of 
-        validity-filtering mask, displaying point cloud plot with matplotlib)
+        validity-filtering mask, displaying point cloud plot with matplotlib, identifying objects from a point cloud), troubleshooting code and python version compatibility errors
       </p>
       <p>
         Nick: Used primarily for debugging, understanding errors and error correction. was also used to help organise code adding headers for better readability. was also used in assisting 
