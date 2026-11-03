@@ -221,34 +221,13 @@
       </div>
     </div>
     <!--/ Concurrent Work. -->
+</section>
 
-    <!-- No Feedforward vs Feedforward PBVS -->
-    <div>
-      <div class="columns is-centered">
-        <!-- Left: Normal Trajectory -->
-        <div class="column is-half">
-          <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-            <img src="./static/images/2cm_tcp_vs_cube_no_feedforward.png" alt="No Feedforward" style="border-radius: 8px; width: 100%; display: block;" />
-          </div>
-        </div>
-
-        <!-- Right: Forced Tag Dropout -->
-        <div class="column is-half">
-          <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-            <img src="./static/images/2cm_tcp_vs_cube.png" alt="Feedforward" style="border-radius: 8px; width: 100%; display: block;" />
-          </div>
-        </div>
-      </div>
-      <p>
-        Initially our robot gripper would lag behind the cube by a significant amount as PBVS was acting on its own error, meaning it must fall behind to generate movement. By feeding the cubes estimated velocity from the KF, 
-        we make the end of the robot (the gripper) move at the cubes estimated velocity, leaving the error to handle small disturbances instead of the entire arm movement. This greatly increased the ability of the robot to follow the cube while it moved across the table.
-      </p>
-    </div>
-    <!-- No Feedforward vs Feedforward PBVS -->
-
-  <!--/ Kalman Filter Section -->
-  <div class="columns is-centered mt-6">
-    <div class="column is-full-width">
+<!--/ Kalman Filter Section -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full-width">
       <h2 class="title is-3">Kalman Filter</h2>
       <div class="content has-text-justified">
         <p>
@@ -258,10 +237,10 @@
         </p>
         <p>
           The filter was tuned by adjusting the measurement noise variance R across all axes and targeting approximately 95% of estimation errors within the 2sigma bound, process noise variance Q was tuned to target a NIS of 3 at the constant cube speed of 
-          2cm/s. To handle dynamic velocities, the process noise variance matrix was scaled linearly with the estimated velocity from the filter.
+          2cm/s. To handle dynamic velocities, the process noise variance matrix Qd was scaled linearly with the estimated velocity from the filter.
         </p>
           
-        <h3 class="title is-4">Results</h3>
+        <h3 class="title is-5">Tracking</h3>
 
         <div class="columns is-centered">
           <!-- Left: Normal Trajectory -->
@@ -285,13 +264,18 @@
           </div>
         </div>
 
-          <p>
-            From these plots taken during a PBVS run we can see that our KF tracks the cubes position well, with minimal deviation from the true path. In the event of the cameras view of the tag being obstructed, the KF coasts on its own prediction.
-          </p>
 
           <p>
-            The filter was tested by parking the arm at its hover position height used for visual servoing, the cube was then moved along a random spline path within the frame. The averages across 10 runs with randomised paths between every run and varying cube 
-            speeds were taken to see the performance trade-offs between static tuning and velocity scaling. A NIS value of around 3 is ideal with approximately 95% (0.95) of our errors being within the 2sigma bounds for each axis.
+            From these plots taken during a PBVS run we can see that our KF tracks the cubes position well, with minimal deviation from the true path. In the event of the cameras view of the tag being obstructed the KF will continue to predict, 
+            which results in the robot continuing to coast in the direction of its last movement.
+          </p>
+
+          <h3 class="title is-5">Performance Analysis</h3>
+
+          <p>
+            The tests below were run on the cube_estimator_test.py file, the arm was parked at its ~25cm hover position used for tracking in the PBVS and the cube was moved around the camera frame on its randomised path. The averages across 10 runs were taken, 
+            with random paths for all runs and the cube speed was varied to see the performance trade-offs between static tuning and velocity scaling. For the higher cube speeds, the path spline length was increased to make approximate runtime similar. 
+            A NIS value of around 3 is ideal with approximately 95% of our errors being within the 2sigma bounds for each axis.
           </p>
 
           <!-- KF Results Table -->
@@ -300,7 +284,7 @@
               <thead>
                 <tr>
                   <th>Cube Velocity</th>
-                  <th>Q Scaled w/Velocity</th>
+                  <th>Qd Scaled w/Velocity</th>
                   <th>X Within</th>
                   <th>Y Within</th>
                   <th>Z Within</th>
@@ -312,62 +296,60 @@
                 <tr>
                   <td>2 cm/s</td>
                   <td>No</td>
-                  <td>0.93</td>
-                  <td>0.93</td>
-                  <td>0.92</td>
+                  <td>93%</td>
+                  <td>93%</td>
+                  <td>92%</td>
                   <td>3.01</td>
                   <td>0.7 mm</td>
                 </tr>
                 <tr>
                   <td>2 cm/s</td>
                   <td>Yes</td>
-                  <td>0.94</td>
-                  <td>0.94</td>
-                  <td>0.94</td>
+                  <td>94%</td>
+                  <td>94%</td>
+                  <td>94%</td>
                   <td>3.02</td>
                   <td>1.0 mm</td>
                 </tr>
                 <tr>
                   <td>4 cm/s</td>
                   <td>No</td>
-                  <td>0.62</td>
-                  <td>0.88</td>
-                  <td>0.96</td>
+                  <td>62%</td>
+                  <td>88%</td>
+                  <td>96%</td>
                   <td>3.96</td>
                   <td>0.5 mm</td>
                 </tr>
                 <tr>
                   <td>4 cm/s</td>
                   <td>Yes</td>
-                  <td>0.83</td>
-                  <td>0.92</td>
-                  <td>0.96</td>
+                  <td>83%</td>
+                  <td>92%</td>
+                  <td>96%</td>
                   <td>3.23</td>
                   <td>0.8 mm</td>
                 </tr>
                 <tr>
                   <td>8 cm/s</td>
                   <td>No</td>
-                  <td>0.21</td>
-                  <td>0.40</td>
-                  <td>0.94</td>
+                  <td>21%</td>
+                  <td>40%</td>
+                  <td>94%</td>
                   <td>17.83</td>
                   <td>1.8 mm</td>
                 </tr>
                 <tr>
                   <td>8 cm/s</td>
                   <td>Yes</td>
-                  <td>0.74</td>
-                  <td>0.89</td>
-                  <td>0.95</td>
+                  <td>74%</td>
+                  <td>89%</td>
+                  <td>95%</td>
                   <td>4.68</td>
                   <td>1.1 mm</td>
                 </tr>
               </tbody>
             </table>
           </div>
-
-
 
           <!-- 2cm/s 2sigma Plot -->
           <div class="columns is-centered">
@@ -384,14 +366,16 @@
           <!-- Table + Plot Discussion -->
           <p>
             At low cube speeds of 2cm/s both configurations achieve nearly identical performance and consistency across the 10 runs. When subjected to 8cm/s speeds without scaling, the static tuned filter becomes severely overconfident and does not leave enough leeway in the models prediction which can be seen in our high 
-            NIS average of 17.83 and low X axis coverage of 0.21 (21%).
+            NIS average of 17.83 and only 21% of our X axis errors being within the 2sigma bounds. 
           </p>
           <p>
-            By scaling the process noise variance matrix with our estimated velocity, we are able to dynamically adjust the filters uncertainty to account for the higher speed. While it does not bring our NIS and coverage back to perfect levels, they are significantly 
-            better with a NIS of 4.68 and 74% of our X axis error within the 2sigma bounds. At the lower cube speeds of 2cm/s and 4cm/s, our unscaled filter has lower average position error at 0.7mm vs 1mm for 2cm/s and 0.5mm vs 0.8mm for 4cm/s. While this may look like a good result 
-            for our 4cm/s, 62% of the X axis error within shows us that it is overconfident cannot be trusted.
+            By scaling the process noise variance matrix Qd with our estimated velocity, we are able to dynamically adjust the filters uncertainty to account for the higher speed. While it does not bring our NIS and errors within the 2sigma bounds back to perfect levels, they are significantly 
+            better with an average NIS of 4.68 and 74% of our X axis error within the 2sigma bounds. At the lower cube speeds of 2cm/s and 4cm/s, our unscaled filter has lower average position error at 0.7mm vs 1mm for 2cm/s and 0.5mm vs 0.8mm for 4cm/s. While this may look like a good result 
+            for our 4cm/s, 62% of the X axis error within shows us that it is overconfident and cannot be trusted due to its high uncertainty.
           <p>
-            Due to the cube sitting on the flat table surface, we have little variation in our Z axis coverage despite the changes in cube speed.
+            Due to the cube sitting on the flat table surface, we have little variation in our Z axis error despite the changes in cube speed. The error we are seeing is 
+            likely caused by camera noise and also encoder noise from the forward kinematics used to transform the cubes coordinates from the camera frame to the world 
+            frame.
           </p>
         </div>
       </div>
@@ -417,7 +401,7 @@
               <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
                 <img src="./static/images/8cm_q_not_scaled_fig.png" alt="8cm/s Unscaled" style="border-radius: 8px; width: 100%; display: block;" />
                 <p class="has-text-centered" style="margin-top: 10px; font-size: 0.9rem; color: #4a5568;">
-                  <b>8cm/s Unscaled:</b> Severely overconfident filter with errors up to 7.5mm in the X axis, over 4mm in the Y axis, the Z axis remains consistend with other trials at ~1mm.
+                  <b>8cm/s Unscaled:</b> Severely overconfident filter with errors up to 7.5mm in the X axis, over 4mm in the Y axis, the Z axis remains consistent with other trials at ~1mm.
                 </p>
               </div>
             </div>
@@ -425,11 +409,9 @@
         </div>
       </div>
     </div>
-    <!--/ Kalman Filter Section -->
-    
-
   </div>
 </section>
+<!--/ Kalman Filter Section -->
 
 <!--/ PBVS Section -->
 <section class="section">
@@ -487,7 +469,7 @@
           <tbody>
             <tr>
               <td>Convergence Tolerance</td>
-              <td>5.0 mm</td>
+              <td>10.0 mm</td>
             </tr>
             <tr>
               <td>Stop Detection Threshold</td>
@@ -510,10 +492,37 @@
       </div>
 
       </div>
+        
+    <!-- No Feedforward vs Feedforward PBVS -->
+    <h3 class="title is-5">Velocity Feedforward</h3>
+    <div>
+      <div class="columns is-centered">
+        <!-- Left: Normal Trajectory -->
+        <div class="column is-half">
+          <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <img src="./static/images/2cm_tcp_vs_cube_no_feedforward.png" alt="No Feedforward" style="border-radius: 8px; width: 100%; display: block;" />
+          </div>
+        </div>
+
+        <!-- Right: Forced Tag Dropout -->
+        <div class="column is-half">
+          <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <img src="./static/images/2cm_tcp_vs_cube.png" alt="Feedforward" style="border-radius: 8px; width: 100%; display: block;" />
+          </div>
+        </div>
+      </div>
+      <p>
+        Initially our robot gripper would lag behind the cube by a significant amount as PBVS was acting on its own error, meaning it must fall behind to generate movement. By feeding the cubes estimated velocity from the KF, 
+        we make the end of the robot (the gripper) move at the cubes estimated velocity, leaving the error to handle small disturbances instead of the entire arm movement. This greatly increased the ability of the robot to follow the cube while it moved across the table. 
+        The Z measurements on the plots sits at hover distance for the gripper, the KF estimates the cube at 5cm as it is based on the tag position on top of the cube while mujocos position is the centre of the cube.
+      </p>
+    </div>
+    <!-- No Feedforward vs Feedforward PBVS -->
     </div>
   </div>
 </section>
 <!--/ PBVS Section -->
+
 <section class="section" id="Contribution">
   <div class="container is-max-desktop content">
     <h2 class="title">Individual Contributions</h2>
@@ -543,7 +552,8 @@
         Plotted graphs used AI to be generated in evaluate_runs to generate graphs based on the accumulated errors. 
       </p>
       <p>
-        Julian: 
+        Julian: Used for assistance in debugging/understanding errors, finding information on how to setup mujoco and mujoco menagerie, the random spline path was generated by AI with some 
+        modifications made for random rotation, AI genererated plotted graphs (with slight user adjustments), HTML formatting for project page.
       </p>
       <p>
         Mary: Used for finding information on mujoco camera conventions, explanations of tutorial code to inform application of certain code structures in program (appication of 
