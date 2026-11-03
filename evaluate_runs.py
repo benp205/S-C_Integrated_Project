@@ -28,7 +28,7 @@ def run_evaluations():
             controller = JointStateController()
 
             # Runs the trial; exits automatically after hold_steps=100 or if 'q'/'Space' is pressed
-            history, first_rgb, cube_log = vsp.run_pbvs(
+            history, first_rgb, cube_log, _ = vsp.run_pbvs(
                 controller=controller,
                 hold_steps=100,
                 reuse_calibration=True,
@@ -38,7 +38,7 @@ def run_evaluations():
             cv2.destroyAllWindows()
             cv2.waitKey(1)
 
-            # 1. Accumulate EKF Cube Estimation Errors (x, y, z)
+            # 1. Accumulate KF Cube Estimation Errors (x, y, z)
             if cube_log:
                 cube_est_pos = np.array([entry[1][:3] for entry in cube_log])
                 cube_true_pos = np.array([entry[2] for entry in cube_log])
@@ -78,7 +78,7 @@ def run_evaluations():
     axs[0, 0].plot(time_steps, last_est_err_mm[:, 0], label="X Error")
     axs[0, 0].plot(time_steps, last_est_err_mm[:, 1], label="Y Error")
     axs[0, 0].plot(time_steps, last_est_err_mm[:, 2], label="Z Error")
-    axs[0, 0].set_title(f"EKF Cube Estimation Error (Run {len(all_est_errors)})")
+    axs[0, 0].set_title(f"KF Cube Estimation Error (Run {len(all_est_errors)})")
     axs[0, 0].set_ylabel("Error (mm)")
     axs[0, 0].set_xlabel("Tracking Step")
     axs[0, 0].legend()
@@ -121,18 +121,18 @@ def run_evaluations():
     print(f"\nSaved combined dashboard to '{dashboard_path}'")
 
     # --- 2. Save Individual Website Figures ---
-    # 2a. EKF Estimation Error
-    fig_ekf, ax_ekf = plt.subplots(figsize=(8, 5))
-    ax_ekf.plot(time_steps, last_est_err_mm[:, 0], label="X Error")
-    ax_ekf.plot(time_steps, last_est_err_mm[:, 1], label="Y Error")
-    ax_ekf.plot(time_steps, last_est_err_mm[:, 2], label="Z Error")
-    ax_ekf.set_title("EKF Cube Position Estimation Error")
-    ax_ekf.set_xlabel("Tracking Step")
-    ax_ekf.set_ylabel("Error (mm)")
-    ax_ekf.legend()
-    ax_ekf.grid(True)
-    fig_ekf.savefig(OUTPUT_DIR / "ekf_estimation_error.png", dpi=300, bbox_inches="tight")
-    plt.close(fig_ekf)
+    # 2a. KF Estimation Error
+    fig_kf, ax_kf = plt.subplots(figsize=(8, 5))
+    ax_kf.plot(time_steps, last_est_err_mm[:, 0], label="X Error")
+    ax_kf.plot(time_steps, last_est_err_mm[:, 1], label="Y Error")
+    ax_kf.plot(time_steps, last_est_err_mm[:, 2], label="Z Error")
+    ax_kf.set_title("KF Cube Position Estimation Error")
+    ax_kf.set_xlabel("Tracking Step")
+    ax_kf.set_ylabel("Error (mm)")
+    ax_kf.legend()
+    ax_kf.grid(True)
+    fig_kf.savefig(OUTPUT_DIR / "kf_estimation_error.png", dpi=300, bbox_inches="tight")
+    plt.close(fig_kf)
 
     # 2b. PBVS Convergence
     fig_pbvs, ax_pbvs = plt.subplots(figsize=(8, 5))
@@ -187,7 +187,7 @@ def run_evaluations():
         plt.close(fig_traj)
 
     print("Saved individual website figures:")
-    print(" - ekf_estimation_error.png")
+    print(" - kf_estimation_error.png")
     print(" - pbvs_convergence.png")
     print(" - final_position_accuracy.png")
     print(" - lqr_tracking_error.png")

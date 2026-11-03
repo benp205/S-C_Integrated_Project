@@ -82,7 +82,7 @@ def detect_tag_pose(rgb, K_matrix=None, dist_coeffs=None):
 
 # --- 4. MAIN PBVS & DEPTH-GUIDED PICK-AND-PLACE STATE MACHINE ---
 def run_pbvs(
-    lam=0.5, niter=4000, vmax=0.10, nsub=10, tol=0.005,
+    lam=0.5, niter=4000, vmax=0.10, nsub=10, tol=0.010,
     grasp_speed=0.05, lift_height=0.15, close_steps=30,
     return_steps=150,    # Number of steps to glide back home
     hold_steps=100,      # Number of steps to hold at home before closing window
