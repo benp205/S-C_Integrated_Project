@@ -9,7 +9,7 @@ from spatialmath import SE3, SO3
 import scene_setup as sc
 from cube_estimator import CubePositionEstimator
 from utils import getEncPosition, CameratoWorld, generate_random_spline_path, CameraJacobian
-from depthbased_object_localisation import get_depth_map
+import depthbased_object_localisation as dbol
 from camera_calibration import calibrate_camera, get_rgb, camera_twist_to_dq
 
 # --- 1. INITIALIZATION & SCENE SETUP ---
@@ -207,7 +207,7 @@ def run_pbvs(
                 print("Early exit requested by user.")
                 break
 
-            depth_map = get_depth_map()
+            depth_map = dbol.get_depth_map()
             z_cube = None
             t_depth = None
 
@@ -288,11 +288,20 @@ def run_pbvs(
                     history.append((uv_noisy, error_norm))
 
                 if error_norm < tol and cube_stopped:
-                    # Use depth camera reading (or KF camera-frame Z) minus 10cm camera-to-gripper offset
-                    measured_d = t_depth if (t_depth is not None and t_depth > 0) else (
-                        last_valid_depth if last_valid_depth is not None else est_cube_pos[2]
-                    )
-                    descent_dist = max(0.02, float(measured_d) - GRIPPER_CAM_OFFSET)
+                    # Display point cloud and report object identification
+                    P_C = dbol.point_cloud(depth_map, K_calib)
+                    dbol.display_depth(P_C, colours='r', frame='camera', title='RGB-D cloud, camera frame')
+                    plane, out, objects, labels = dbol.object_id(P_C)
+
+                    if plane is not None and len(out) != 0 and objects is not None and labels is not None:
+                        # Use calculated centroid of detected object minus 10 cm camera-to-gripper offset
+                        descent_dist = out[0]['centroid'][2] - GRIPPER_CAM_OFFSET
+                    else:
+                        # Use depth camera reading (or KF camera-frame Z) minus 10cm camera-to-gripper offset
+                        measured_d = t_depth if (t_depth is not None and t_depth > 0) else (
+                            last_valid_depth if last_valid_depth is not None else est_cube_pos[2]
+                        )
+                        descent_dist = max(0.02, float(measured_d) - GRIPPER_CAM_OFFSET)
                     steps_remaining = max(1, int(np.ceil(descent_dist / (grasp_speed * dt))))
                     print(f"Converged (error: {error_norm:.4f}m). Depth-guided descent ({descent_dist:.4f}m) to grasp...")
                     if nis_cube:
