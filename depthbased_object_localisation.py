@@ -44,7 +44,7 @@ def display_depth(points, colours=None, title='', frame='camera', ax=None,
     ax.set_box_aspect(np.maximum([np.ptp(A), np.ptp(B), np.ptp(Cc)], 1e-3))
     ax.view_init(elev=elev, azim=azim)
     ax.set_title(title)
-    plt.show(block=False)
+    plt.show()
     return ax
 
 # From week 4 tut setup

@@ -1,13 +1,14 @@
 from Joint_Space import JointStateController
 import visual_servo_pbvs as vsp
 import numpy as np
+from depthbased_object_localisation import display_depth
 
 # PBVS produces the desired joint pose (q_target); the state controller (LQR + Luenberger
 # observer) converts it into the position commands written to the arm actuators.
 controller = JointStateController()
 
 try:
-    history, first_rgb, cube_log, gripper_log = vsp.run_pbvs(controller=controller)
+    history, first_rgb, cube_log, gripper_log, P_C = vsp.run_pbvs(controller=controller)
     print(f"{len(history)} visual tracking steps executed.")
 
     cube_est_pos = np.array([entry[1][:3] for entry in cube_log]) #take x, y, z from estimation
@@ -25,6 +26,8 @@ try:
         vsp.plot_on_image(history, first_rgb)
     if cube_log and gripper_log:
         vsp.plot_cube_tracking(cube_log, gripper_log)
+    display_depth(P_C, colours='r', frame='camera', title='RGB-D cloud, camera frame just before descent')
+    
 finally:
     vsp.renderer.close()
 

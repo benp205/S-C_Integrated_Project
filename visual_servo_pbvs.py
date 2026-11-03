@@ -290,7 +290,6 @@ def run_pbvs(
                 if error_norm < tol and cube_stopped:
                     # Display point cloud and report object identification
                     P_C = dbol.point_cloud(depth_map, K_calib)
-                    dbol.display_depth(P_C, colours='r', frame='camera', title='RGB-D cloud, camera frame')
                     plane, out, objects, labels = dbol.object_id(P_C)
 
                     if plane is not None and len(out) != 0 and objects is not None and labels is not None:
@@ -387,7 +386,7 @@ def run_pbvs(
     run_pbvs.last_joint_log = joint_log
     run_pbvs.last_nis = nis_cube
 
-    return history, first_rgb, cube_log, gripper_log
+    return history, first_rgb, cube_log, gripper_log, P_C
 
 
 # --- 5. VISUALIZATION ---
@@ -455,11 +454,12 @@ def plot_cube_tracking(cube_log, gripper_log):
 
 if __name__ == "__main__":
     try:
-        history, first_rgb, cube_log, gripper_log = run_pbvs()
+        history, first_rgb, cube_log, gripper_log, P_C = run_pbvs()
         print(f"{len(history)} visual tracking steps executed.")
         if history:
             plot_on_image(history, first_rgb)
         if cube_log:
             plot_cube_tracking(cube_log, gripper_log)
+        dbol.display_depth(P_C, colours='r', frame='camera', title='RGB-D cloud, camera frame just before descent')
     finally:
         renderer.close()

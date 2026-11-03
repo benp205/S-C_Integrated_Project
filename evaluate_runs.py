@@ -28,7 +28,7 @@ def run_evaluations():
             controller = JointStateController()
 
             # Runs the trial; exits automatically after hold_steps=100 or if 'q'/'Space' is pressed
-            history, first_rgb, cube_log, _ = vsp.run_pbvs(
+            history, first_rgb, cube_log, _, _ = vsp.run_pbvs(
                 controller=controller,
                 hold_steps=100,
                 reuse_calibration=True,
