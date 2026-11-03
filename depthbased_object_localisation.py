@@ -44,7 +44,7 @@ def display_depth(points, colours=None, title='', frame='camera', ax=None,
     ax.set_box_aspect(np.maximum([np.ptp(A), np.ptp(B), np.ptp(Cc)], 1e-3))
     ax.view_init(elev=elev, azim=azim)
     ax.set_title(title)
-    plt.show()
+    plt.show(block=False)
     return ax
 
 # From week 4 tut setup
@@ -56,7 +56,7 @@ def get_depth_map():
     '''Renders and returns the current depth map from the wrist-mounted camera.'''
     renderer.enable_depth_rendering()
     renderer.update_scene(data, camera=camera_id)
-    depth_true = renderer.render() # Depth should be 2D float array corresponding to depth reading of every pixel in meters
+    depth_true = renderer.render()            # Depth should be 2D float array corresponding to depth reading of every pixel in meters
     renderer.disable_depth_rendering()
 
     # Add noise here (from week 4 tut part 2)
@@ -69,9 +69,9 @@ def point_cloud(depth_map, K, T_RC=None):
     '''Returns pixel-to-depth correspondence grid matrix + 3D cartesian point cloud in camera (and robot) frame.'''
 
     # Camera instrinsics
-    H, W = depth_map.shape[0], depth_map.shape[1] # should be H = 480 px, W = 640 px
+    H, W = depth_map.shape[0], depth_map.shape[1]                    # should be H = 480 px, W = 640 px
 
-    uu, vv = np.meshgrid(np.arange(W), np.arange(H)) # Pixel grid
+    uu, vv = np.meshgrid(np.arange(W), np.arange(H))                 # Pixel grid
     valid = np.isfinite(depth_map.ravel()) & (depth_map.ravel() > 0) # 1d mask to filter invalid depth values
 
     # Referencing week 4 tut part 2
@@ -79,7 +79,7 @@ def point_cloud(depth_map, K, T_RC=None):
     vv_valid = vv.ravel()[valid]
     d_valid = depth_map.ravel()[valid]
 
-    z_rgbd = np.stack([uu_valid, vv_valid, d_valid]) # z_rgbd = [u v d]^⊤
+    z_rgbd = np.stack([uu_valid, vv_valid, d_valid])                 # z_rgbd = [u v d]^⊤
 
     # Apply p_C = d K^(−1) [u v 1]^⊤ to define 3D cartesian points in physical space
     uv1 = np.stack([uu_valid, vv_valid, np.ones(valid.sum())])
@@ -100,28 +100,30 @@ def object_id(point_cloud, voxel=0.005, nb=20, std_ratio=2.0,
               verbose=True):
     """Downsample, denoise, crop, fit the support plane, cluster what sits on it."""
 
-    # convert 3D point coordinate array to Open3D PointCloud object
+    # Convert 3D point coordinate array to Open3D PointCloud object
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(point_cloud)
 
-    down = pcd.voxel_down_sample(voxel)
-    clean, keep_idx = down.remove_statistical_outlier(nb_neighbors=nb, std_ratio=std_ratio)
-    work = clean.crop(roi)
-    removed = down.select_by_index(keep_idx, invert=True) # restricts anaylsis to 
+    down = pcd.voxel_down_sample(voxel)                                                     # Decrease point density of cloud to reduce computational load
+    clean, keep_idx = down.remove_statistical_outlier(nb_neighbors=nb, std_ratio=std_ratio) # Use statistical outlier removal to filter out noisy measurments
+    work = clean.crop(roi)                                                                  # Restricts anaylsis to Region of Interest (ROI)
+    removed = down.select_by_index(keep_idx, invert=True)
 
+    # Use RANSAC to determine the table surface from remaining points
     plane, inliers = work.segment_plane(plane_thresh, 3, 500)
     plane = np.array(plane)
-    if plane[2] > 0:
-        plane = -plane
+    if plane[2] > 0:                                                                        # Changed to match camera frame axes conventions
+        plane = -plane                                                                      # (normal of table plane points towards the camera)
     pts = np.asarray(work.points)
     sd = pts @ plane[:3] + plane[3]
     objects = work.select_by_index(np.flatnonzero(sd > above))
 
-    # if point cloud is reduced to the point of unusability, return empty result
+    # If point cloud is reduced to the point of unusability, return empty result
     if objects.is_empty():
         print("No objects found above the table.")
         return plane, [], None, None
 
+    # Group object points using DBSCAN to distinguish individual physical objects 
     labels = np.array(objects.cluster_dbscan(eps=eps, min_points=min_points))
     obj_pts = np.asarray(objects.points)
     out = []
@@ -130,6 +132,7 @@ def object_id(point_cloud, voxel=0.005, nb=20, std_ratio=2.0,
         out.append(dict(n=len(p), centroid=p.mean(axis=0), extent=p.max(axis=0) - p.min(axis=0)))
     out.sort(key=lambda o: o['centroid'][0])
 
+    # Report point reduction stats, depth of plane, and identified objects
     if verbose:
         print(f'{len(pcd.points):>7} points in, {len(work.points):>6} in the workspace, '
               f'table at z = {-plane[3] / plane[2]:.3f} m, {len(out)} objects')
