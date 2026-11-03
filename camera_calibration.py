@@ -51,14 +51,14 @@ def camera_twist_to_dq(nu, q_est, damping=1e-3):
 
 def measured_corners(im, grid_shape=CHECKERBOARD):
     """Sub-pixel checkerboard corners, returned as a 2 x N array (Tutorial Part C)."""
-    g = im.mono().array if im.iscolor else im.array
-    flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
-    ok, c = cv2.findChessboardCorners(g, grid_shape, flags)
+    g = im.mono().array if im.iscolor else im.array # Convert to grayscale for checkerboard detection
+    flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE # Flags for checkerboard detection
+    ok, c = cv2.findChessboardCorners(g, grid_shape, flags) # Detect the checkerboard corners in the grayscale image
     if not ok:
         return None
-    crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    c = cv2.cornerSubPix(g, c, (5, 5), (-1, -1), crit)
-    return c.reshape(-1, 2).T
+    crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001) # Termination criteria for sub-pixel corner refinement
+    c = cv2.cornerSubPix(g, c, (5, 5), (-1, -1), crit) # Refine corner locations to sub-pixel accuracy
+    return c.reshape(-1, 2).T # Return corners as 2 x N array for calibration
 
 
 def move_camera_to_look_at(target_cam_pos, board_center, viewer=None, max_steps=90):
@@ -82,6 +82,7 @@ def move_camera_to_look_at(target_cam_pos, board_center, viewer=None, max_steps=
         y_des = np.cross(z_des, x_des)
         y_des = y_des / np.linalg.norm(y_des)
 
+        # Construct the desired rotation matrix from the orthonormal axes
         R_des = np.column_stack([x_des, y_des, z_des])
 
         # Pose error in camera frame
@@ -92,6 +93,7 @@ def move_camera_to_look_at(target_cam_pos, board_center, viewer=None, max_steps=
         if np.linalg.norm(e_pos) < 1e-3 and np.linalg.norm(e_rot) < 1e-2:
             break
 
+        # Compute the desired twist (linear and angular velocity) in the camera frame
         nu = np.r_[2.0 * e_pos, 2.0 * e_rot]
         dq = camera_twist_to_dq(nu, enc_pos, damping=1e-2)
         data.qpos[qadr] += dq * 0.03
@@ -123,6 +125,7 @@ def calibrate_camera(cam_id, viewer=None):
         viewer.sync()
         time.sleep(0.5)
 
+    # Define the camera viewpoints relative to the table for calibration
     cam_viewpoints = [
         np.array([-0.10, 0.48, 0.32]),
         np.array([-0.18, 0.44, 0.30]),
@@ -138,26 +141,28 @@ def calibrate_camera(cam_id, viewer=None):
     for i, vp in enumerate(cam_viewpoints):
         if viewer is not None and not viewer.is_running():
             break
-
+        # Move the camera to the current viewpoint and orient it to look at the board center
         move_camera_to_look_at(vp, board_center, viewer=viewer)
         mj.mj_forward(model, data)
 
+        # Capture an RGB image from the camera and convert it to grayscale for checkerboard detection
         rgb = get_rgb()
         gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
         bgr_vis = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
+        # Convert the grayscale image to the format expected by the checkerboard detection function
         im = Image(gray)
         p_meas = measured_corners(im, CHECKERBOARD)
 
         if p_meas is not None:
-            valid_images.append(im)
-            corners_cv = p_meas.T.reshape(-1, 1, 2).astype(np.float32)
+            valid_images.append(im) # Store the image for later calibration if checkerboard is detected
+            corners_cv = p_meas.T.reshape(-1, 1, 2).astype(np.float32) # Reshape measured corners for OpenCV visualization
             cv2.drawChessboardCorners(bgr_vis, CHECKERBOARD, corners_cv, True)
             cv2.putText(bgr_vis, f"Pose {i+1}/6: DETECTED", (20, 35),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2) # Indicate that the checkerboard was detected in this pose
         else:
             cv2.putText(bgr_vis, f"Pose {i+1}/6: NOT DETECTED", (20, 35),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2) # Indicate that the checkerboard was not detected in this pose
 
         cv2.imshow("Wrist Camera - Calibration View", bgr_vis)
         cv2.waitKey(600)
@@ -179,11 +184,13 @@ def calibrate_camera(cam_id, viewer=None):
         valid_images, gridshape=CHECKERBOARD, squaresize=square_size
     )
 
+    # Extract focal lengths and principal point from the estimated intrinsic matrix
     fu, fv = K_est[0, 0], K_est[1, 1]
     u0, v0 = K_est[0, 2], K_est[1, 2]
     W, H = valid_images[0].width, valid_images[0].height
     fov_h = 2 * np.arctan(W / (2 * fu))
 
+    # Print calibration summary and intrinsic parameters
     print(f"grid {CHECKERBOARD}: {len(frames)} of {len(cam_viewpoints)} images were used")
     print(f"f/rho_u = {fu:.1f} px,  f/rho_v = {fv:.1f} px")
     print(f"principal point = ({u0:.1f}, {v0:.1f}) px, image centre = ({W/2:.1f}, {H/2:.1f}) px")
@@ -198,16 +205,17 @@ def calibrate_camera(cam_id, viewer=None):
         und = valid_images[fr.id].undistort(K_est, dist_est)
         p_meas = measured_corners(und, CHECKERBOARD)
         if p_meas is not None:
-            cal_cam.pose = fr.pose
-            p_proj = cal_cam.project_point(P_board)
-            resid = p_meas - p_proj
-            e = np.linalg.norm(resid, axis=0)
-            rms = np.sqrt((e**2).mean())
-            rms_list.append(rms)
+            cal_cam.pose = fr.pose # Set the camera pose for this frame before projecting points
+            p_proj = cal_cam.project_point(P_board) # Project the 3D checkerboard points into the image using the estimated camera pose
+            resid = p_meas - p_proj # Compute the reprojection error for this frame
+            e = np.linalg.norm(resid, axis=0) # Compute the Euclidean distance for each corner's reprojection error
+            rms = np.sqrt((e**2).mean()) # Compute the root mean square (RMS) reprojection error for this frame
+            rms_list.append(rms) # Append the RMS error for this frame to the list
 
-    f_px_analytical = (480 / 2) / np.tan(np.deg2rad(model.cam_fovy[cam_id]) / 2)
+    
+    f_px_analytical = (480 / 2) / np.tan(np.deg2rad(model.cam_fovy[cam_id]) / 2) # Compute the analytical focal length in pixels based on the camera's vertical field of view
     K_analytical = np.array([
-        [f_px_analytical, 0,               640 / 2],
+        [f_px_analytical, 0,               640 / 2], # Construct the analytical intrinsic matrix
         [0,               f_px_analytical, 480 / 2],
         [0,               0,               1]
     ])
@@ -219,4 +227,4 @@ def calibrate_camera(cam_id, viewer=None):
     print(np.round(K_analytical, 2))
     print(f"Focal Length Error (fx): {abs(K_est[0, 0] - f_px_analytical):.2f} px\n")
 
-    return K_est, dist_est
+    return K_est, dist_est # Return the estimated intrinsic matrix and distortion coefficients
