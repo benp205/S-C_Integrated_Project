@@ -5,19 +5,20 @@ from scipy.linalg import solve_discrete_are
 
 
 
-N = 6
-DT = 0.02
+N = 6 # DOF (Degrees of Freedom)
+DT = 0.02 # Discrete time step for the controller
 
-I = np.eye(N)
-Z = np.zeros((N, N))
+I = np.eye(N) # Identity matrix of size N
+Z = np.zeros((N, N)) # Zero matrix of size N x N
 
 # Nominal position-servo dynamics
 # q_ddot = wn^2 * (u - q) - 2*zeta*wn*q_dot
 #
 # These are initial estimates, not identified robot values.
-WN = 8.0
-ZETA = 1.0
+WN = 8.0 # Natural frequency of the nominal position-servo dynamics
+ZETA = 1.0 # Damping ratio of the nominal position-servo dynamics
 
+# Continuous-time state-space matrices for the nominal position-servo dynamics
 Ac = np.block([
     [Z, I],
     [-WN**2 * I, -2 * ZETA * WN * I]
@@ -27,7 +28,7 @@ Bc = np.vstack([
     Z,
     WN**2 * I
 ])
-
+# Output matrix and feedthrough for position measurement
 C = np.hstack([I, Z])
 D = np.zeros((N, N))
 
@@ -40,7 +41,7 @@ A, B, _, _, _ = cont2discrete(
 # -------------------------------------------------------
 # CONTROLLABILITY AND OBSERVABILITY
 # -------------------------------------------------------
-
+# Compute and display the rank of the controllability and observability matrices to check system properties
 def controllability_matrix(A, B):
     return np.hstack([
         np.linalg.matrix_power(A, i) @ B
@@ -54,7 +55,7 @@ def observability_matrix(A, C):
         for i in range(A.shape[0])
     ])
 
-
+# Compute and display the rank of the controllability and observability matrices to check system properties
 ctrb_rank = np.linalg.matrix_rank(
     controllability_matrix(A, B)
 )
@@ -67,15 +68,15 @@ obsv_rank = np.linalg.matrix_rank(
 # LQR CONTROLLER
 # -------------------------------------------------------
 
-Q = np.diag([100.0] * N + [5.0] * N)
-R = np.eye(N) * 1.0
+Q = np.diag([100.0] * N + [5.0] * N) # State weighting matrix for LQR (position and velocity)
+R = np.eye(N) * 1.0 # Control weighting matrix for LQR
 
-P = solve_discrete_are(A, B, Q, R)
+P = solve_discrete_are(A, B, Q, R) # Solution to the discrete-time algebraic Riccati equation for LQR
 
 K = np.linalg.solve(
     R + B.T @ P @ B,
     B.T @ P @ A
-)
+) # LQR gain matrix for state feedback
 
 # -------------------------------------------------------
 # LUENBERGER OBSERVER
