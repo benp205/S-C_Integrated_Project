@@ -526,6 +526,55 @@
 </section>
 <!--/ PBVS Section -->
 
+<section class="section">
+    <div class="container">
+
+        <h2 class="title is-3">Joint-Space State Controller</h2>
+
+        <p>
+            An LQR controller was used to control the six joints of the UR5e
+            robot, helping them move accurately to their target positions.
+            A Luenberger observer was also used to estimate joint speeds
+            from position measurements.
+        </p>
+
+        <p>
+            Testing showed that the controller was stable, all six joints
+            reached their targets, and the observer accurately estimated
+            joint speeds.
+        </p>
+
+        <br>
+
+        <div class="columns is-variable is-4">
+
+            <div class="column is-half">
+                <figure class="image">
+                    <img src="./static/images/LQR%20Position%20Tracking.png"
+                         alt="LQR Joint Position Tracking">
+                </figure>
+                <p class="has-text-centered">
+                    Figure 1: LQR Joint Position Tracking
+                </p>
+            </div>
+
+            <div class="column is-half">
+                <figure class="image">
+                    <img src="./static/images/Luenberger%20Observer%20Performance.png"
+                         alt="Luenberger Observer Performance">
+                </figure>
+                <p class="has-text-centered">
+                    Figure 2: Luenberger Observer Performance
+                </p>
+            </div>
+
+        </div>
+
+    </div>
+</section>
+
+
+  
 <section class="section" id="Contribution">
   <div class="container is-max-desktop content">
     <h2 class="title">Individual Contributions</h2>
