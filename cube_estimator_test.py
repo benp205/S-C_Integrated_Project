@@ -1,3 +1,5 @@
+# This file is a copy of the PBVS file without the robot tracking movement, it sits hovering ~25cm about the cube/table and logs the cube position and estimated positions for KF performance reporting purposes
+
 import time
 import mujoco as mj
 import mujoco.viewer
