@@ -236,8 +236,8 @@
           feeds the PBVS feed forward, and knowing when the cube is stopped so we can initiate our pick.
         </p>
         <p>
-          The filter was tuned by adjusting the measurement noise variance R across all axes and targeting approximately 95% of estimation errors within the 2sigma bound, process noise variance Q was tuned to target a NIS of 3 at the constant cube speed of 
-          2cm/s. To handle dynamic velocities, the process noise variance matrix Qd was scaled linearly with the estimated velocity from the filter.
+          The filter was tuned by adjusting the measurement noise covariance Rn across all axes and targeting approximately 95% of estimation errors within the 2sigma bound, process noise covariance Qd was tuned to target a NIS of 3 at the constant cube speed of 
+          2cm/s. To handle dynamic velocities, the process noise covariance matrix Qd was scaled linearly with the estimated velocity from the filter.
         </p>
           
         <h3 class="title is-5">Tracking</h3>
@@ -357,7 +357,7 @@
               <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
                 <img src="./static/images/2cm_q_scaled_fig.png" alt="2cm/s 2sig Plot" style="border-radius: 8px; width: 100%; display: block;" />
                 <p class="has-text-centered" style="margin-top: 10px; font-size: 0.9rem; color: #4a5568;">
-                  2cm/s with Q scaling errors within 2sigma plot
+                  2cm/s with Qd scaling errors within 2sigma plot
                 </p>
               </div>
             </div>
@@ -369,7 +369,7 @@
             NIS average of 17.83 and only 21% of our X axis errors being within the 2sigma bounds. 
           </p>
           <p>
-            By scaling the process noise variance matrix Qd with our estimated velocity, we are able to dynamically adjust the filters uncertainty to account for the higher speed. While it does not bring our NIS and errors within the 2sigma bounds back to perfect levels, they are significantly 
+            By scaling the process noise covariance matrix Qd with our estimated velocity, we are able to dynamically adjust the filters uncertainty to account for the higher speed. While it does not bring our NIS and errors within the 2sigma bounds back to perfect levels, they are significantly 
             better with an average NIS of 4.68 and 74% of our X axis error within the 2sigma bounds. At the lower cube speeds of 2cm/s and 4cm/s, our unscaled filter has lower average position error at 0.7mm vs 1mm for 2cm/s and 0.5mm vs 0.8mm for 4cm/s. While this may look like a good result 
             for our 4cm/s, 62% of the X axis error within shows us that it is overconfident and cannot be trusted due to its high uncertainty.
           <p>
