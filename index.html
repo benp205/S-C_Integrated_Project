@@ -580,11 +580,20 @@
         Original implementation used only RGB-D depth measurements to determine the extent of the descent, whereas the latest method accounts for noise during
         cloud processing and bases descent distance on calculations of the cube's geometry.
       </p>
-      <div class="flex-quadrant">
-        <img src="./static/images/point_cloud.png" alt="Quadrant 1">               <!-- Top Left: Point Cloud General View -->
-        <img src="./static/images/point_cloud_view_headon.png" alt="Quadrant 2">   <!-- Top Right: Point Cloud Head-on View -->
-        <img src="./static/images/point_cloud_view_s.png" alt="Quadrant 3">        <!-- Bottom Left: Point Cloud Side View -->
-        <img src="./static/images/point_cloud_view_t.png" alt="Quadrant 4">        <!-- Bottom Right: Point Cloud Top View -->
+      <div class="columns is-centered">
+        <!-- Left: Point Cloud General View -->
+        <div class="column is-half">
+          <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <img src="./static/images/point_cloud.png" alt="PC general view" style="border-radius: 8px; width: 100%; display: block;" />
+          </div>
+        </div>
+
+        <!-- Right: Point Cloud Side View -->
+        <div class="column is-half">
+          <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <img src="./static/images/point_cloud_view_t.png" alt="PC side view" style="border-radius: 8px; width: 100%; display: block;" />
+          </div>
+        </div>
       </div>
       <p>
         For further improvement, geometry metrics other than the z-component of the centroid of identified objects could be used to verify their position relative to the end effector and make
