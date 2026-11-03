@@ -431,7 +431,86 @@
   </div>
 </section>
 
+<!--/ PBVS Section -->
+<div class="columns is-centered mt-6">
+  <div class="column is-full-width">
+    <h2 class="title is-3">Position-Based Visual Servoing (PBVS)</h2>
+    <div class="content has-text-justified">
+      <p>
+        A Position-Based Visual Servoing (PBVS) controller was developed to track the moving cube and position the camera 25cm directly above the target. 
+        The system calculates the 3D Cartesian error between the camera and the target, feeding the Kalman Filter's estimated cube velocity forward into the control loop to minimize steady-state tracking lag. 
+        To ensure safe and stable operation, a maximum Cartesian velocity limit of 0.10 m/s is enforced.
+      </p>
+      <p>
+        The visual servoing loop continuously tracks the target along its randomized spline path until it rests. A stop is assigned at 0.002m/s to avoid potential errors.
+        Once stationary, the PBVS controller tunes the arm's position until 3D translational error falls below a 5mm tolerance. 
+        After converging, the system uses the center depth camera reading to calculate the exact descent distance, compensating for the 10cm camera-to-gripper offset before initiating the final grasp.
+      </p>
+      <h3 class="title is-4">Results</h3>
+      <div class="columns is-centered">
+        <!-- Left: Error Convergence -->
+        <div class="column is-half">
+          <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <img src="./static/images/pbvs_convergence.png" alt="PBVS 3D Translational Error Convergence" style="border-radius: 8px; width: 100%; display: block;" />
+            <p class="has-text-centered" style="margin-top: 10px; font-size: 0.9rem; color: #4a5568;">
+              <b>Error Convergence:</b> 3D position error norm decaying over control iterations[cite: 7].
+            </p>
+          </div>
+        </div>
 
+        <!-- Right: Image-Space Trajectories -->
+        <div class="column is-half">
+          <div class="box" style="padding: 1rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <img src="./static/images/pbvs_corner_trajectories.png" alt="PBVS Tag Corner Trajectories" style="border-radius: 8px; width: 100%; display: block;" />
+            <p class="has-text-centered" style="margin-top: 10px; font-size: 0.9rem; color: #4a5568;">
+              <b>Feature Tracking:</b> Image-space trajectories of the ArUco marker corners during alignment[cite: 7].
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <p>
+        Across multiple evaluation runs, the PBVS system successfully rejects noise and drives the 3D position error down to the required threshold. 
+      </p>
+
+      <!-- PBVS Results Table -->
+      <div class="table-container mt-5">
+        <table class="table is-bordered is-striped is-fullwidth has-text-centered">
+          <thead>
+            <tr>
+              <th>Evaluation Metric</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Convergence Tolerance</td>
+              <td>5.0 mm</td>
+            </tr>
+            <tr>
+              <td>Stop Detection Threshold</td>
+              <td>< 0.002 m/s (over 100 frames)</td>
+            </tr>
+            <tr>
+              <td>Max Commanded Velocity</td>
+              <td>0.10 m/s</td>
+            </tr>
+            <tr>
+              <td>Mean Euclidean Position Error (Example)</td>
+              <td>~0.88 mm</td>
+            </tr>
+            <tr>
+              <td>Max Euclidean Position Error (Example)</td>
+              <td>~2.47 mm</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!--/ PBVS Section -->
 <section class="section" id="Contribution">
   <div class="container is-max-desktop content">
     <h2 class="title">Individual Contributions</h2>
